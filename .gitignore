@@ -1,0 +1,15 @@
+# Godot 4+ specific ignores
+.godot/
+*.translation
+*.import
+export_presets.cfg
+
+# Mono / C# (if ever added)
+.mono/
+data_*/
+mono_crash.*.json
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+*.tmp
