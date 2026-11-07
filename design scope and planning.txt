@@ -1,0 +1,62 @@
+# Rubik's Cube Project Architecture & Roadmap
+
+## 1. Design Pillars
+
+- **Pillar 1: Mathematical Ground Truth Over Visual Hacks**
+  - Logical state lives strictly in discrete integer math (Vector3i and integer matrices {-1, 0, 1}).
+  - Visual meshes are disposable displays; 3D transforms never dictate game state, preventing floating-point drift.
+- **Pillar 2: Total Time Reversibility (Undo / Redo / Scrubber)**
+  - Every user or engine action is logged as a discrete delta packet on a stack.
+  - State can jump forward, backward, or restore to zero instantly without desyncing visuals from logic.
+- **Pillar 3: Modular Input Agnosticism**
+  - Controls are abstracted into high-level actions (action_turn_R, action_prime_modifier).
+  - Input profiles can be swapped, saved, and loaded dynamically from JSON to test gamepad vs. keyboard schemes.
+- **Pillar 4: Extensible CFOP Progression**
+  - Mini-games (Crossle, F2L, OLL, PLL) plug into the same core engine as modular hooks rather than separate games.
+  - A shared algorithm library (algorithms.json) drives both computer playback and human training.
+- **Pillar 5: Clear Collaboration & Maintainability**
+  - Code readability and explanatory commenting take priority over clever micro-optimizations.
+  - Clean separation of concerns: Input -> Logic Engine -> Move Tape -> 3D Visuals.
+
+---
+
+## 2. Actionable Implementation Steps
+
+### Phase 1: Engine Foundation & Visuals
+1. **Repository Setup:** Initialize Git repo, configure .gitignore for Godot 4.x, and set up directory structure.
+2. **Piece Asset:** Build a single unit mesh scene with 6 materials (White, Yellow, Green, Blue, Red, Orange, plus black core).
+3. **Root Scene & Pivot Assembly:** Instance 26 pieces at integer coordinates {-1, 0, 1} around an empty center (0, 0, 0) with a dynamic Pivot3D node.
+4. **Basic Camera:** Set up an orbit camera on the right analog stick / mouse drag centered on origin.
+
+### Phase 2: Logic & Rotation Pipeline
+1. **Integer State Matrix:** Write the 26-piece logical array and axis-rotation math.
+2. **Move Execution Pipeline:**
+   - Filter 9 pieces on the active layer.
+   - Reparent the 9 visual pieces to Pivot3D.
+   - Tween the pivot 90° clockwise or counterclockwise.
+   - Update logical integer positions/orientations.
+   - Reparent pieces back to root and bake the transform.
+3. **Move Tape Logger:** Build the history stack storing move notation, timestamps, and state snapshots.
+
+### Phase 3: Input, Scrambler & Debug UI
+1. **Control Profile Loader:** Implement JSON-based gamepad binding reader with default mapping.
+2. **Debug HUD:** On-screen overlay showing:
+   - Real-time move history list.
+   - Time-scrubber slider (scrubbing pops/pushes states across the Move Tape).
+   - Active profile indicator.
+3. **Scramble & Reset:**
+   - "Restore Solved State" button (instant 1-frame matrix and visual reset).
+   - Random WCA scramble generator with basic redundancy filtering.
+   - Clipboard text parser for manual Singmaster shorthand ingestion (R U R' U').
+
+### Phase 4: Audio & Session State
+1. **Audio Manager:** Add sound effects for layer clicks (with dynamic pitch randomization), whoosh for rewinds, and a solved chime.
+2. **Session Brain:** Implement the session state machine: IDLE -> SCRAMBLE -> INSPECTION (15s timer) -> SOLVE (stopwatch) -> COMPLETED.
+
+### Phase 5: Mini-Game Integration (Placeholders First)
+1. **Algorithm Library:** Set up algorithms.json with basic triggers (Sexy Move, Sledgehammer, T-Perm, J-Perm).
+2. **Base Mode Hook:** Create the abstract base_mode.gd interface that listens to move_completed and checks win conditions.
+3. **Crossle (First Game Mode):**
+   - Piece masking (dim or hide all non-cross pieces).
+   - Move efficiency counter comparing player moves against optimal path.
+4. **Future CFOP Hooks:** Stub out placeholders for F2L slotting, OLL trainer, and PLL time-trials.
