@@ -1,0 +1,59 @@
+[gd_scene format=3 uid="uid://ccv32to5r7134"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_0olre"]
+size = Vector3(0.95, 0.95, 0.95)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3makh"]
+albedo_color = Color(1, 0.8352941, 0, 1)
+
+[sub_resource type="QuadMesh" id="QuadMesh_0olre"]
+size = Vector2(0.85, 0.85)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hkc8k"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hisf2"]
+albedo_color = Color(0, 0.60784316, 0.28235295, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sk825"]
+albedo_color = Color(0, 0.27450982, 0.6784314, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y1xrd"]
+albedo_color = Color(0.7176471, 0.07058824, 0.20392157, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_g8yu5"]
+albedo_color = Color(1, 0.34509805, 0, 1)
+
+[node name="Piece" type="Node3D" unique_id=1991439674]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=752355459]
+mesh = SubResource("BoxMesh_0olre")
+
+[node name="Face_Yellow" type="MeshInstance3D" parent="MeshInstance3D" unique_id=586778436]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0.476, 0)
+material_override = SubResource("StandardMaterial3D_3makh")
+mesh = SubResource("QuadMesh_0olre")
+
+[node name="Face_White" type="MeshInstance3D" parent="MeshInstance3D" unique_id=293865319]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, -0.476, 0)
+material_override = SubResource("StandardMaterial3D_hkc8k")
+mesh = SubResource("QuadMesh_0olre")
+
+[node name="Face_Green" type="MeshInstance3D" parent="MeshInstance3D" unique_id=446955278]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.476)
+material_override = SubResource("StandardMaterial3D_hisf2")
+mesh = SubResource("QuadMesh_0olre")
+
+[node name="Face_Blue" type="MeshInstance3D" parent="MeshInstance3D" unique_id=1038879072]
+transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 0, 0, -0.476)
+material_override = SubResource("StandardMaterial3D_sk825")
+mesh = SubResource("QuadMesh_0olre")
+
+[node name="Face_Red" type="MeshInstance3D" parent="MeshInstance3D" unique_id=378809819]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0.476, 0, 0)
+material_override = SubResource("StandardMaterial3D_y1xrd")
+mesh = SubResource("QuadMesh_0olre")
+
+[node name="Face_Orange" type="MeshInstance3D" parent="MeshInstance3D" unique_id=1159132529]
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, -0.476, 0, 0)
+material_override = SubResource("StandardMaterial3D_g8yu5")
+mesh = SubResource("QuadMesh_0olre")
