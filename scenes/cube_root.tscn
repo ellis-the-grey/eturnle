@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dbrxep57dvsvy"]
+
+[ext_resource type="Script" uid="uid://sgbarrx77ucl" path="res://scripts/core/cube_root.gd" id="1_ib81i"]
+
+[node name="CubeRoot" type="Node3D" unique_id=1973148647]
+script = ExtResource("1_ib81i")
