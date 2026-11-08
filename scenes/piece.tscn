@@ -1,5 +1,8 @@
 [gd_scene format=3 uid="uid://ccv32to5r7134"]
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tvnf0"]
+albedo_color = Color(0, 0, 0, 1)
+
 [sub_resource type="BoxMesh" id="BoxMesh_0olre"]
 size = Vector3(0.95, 0.95, 0.95)
 
@@ -26,6 +29,7 @@ albedo_color = Color(1, 0.34509805, 0, 1)
 [node name="Piece" type="Node3D" unique_id=1991439674]
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=752355459]
+material_override = SubResource("StandardMaterial3D_tvnf0")
 mesh = SubResource("BoxMesh_0olre")
 
 [node name="Face_Yellow" type="MeshInstance3D" parent="MeshInstance3D" unique_id=586778436]
