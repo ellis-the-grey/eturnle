@@ -1,0 +1,44 @@
+{
+  "profile_name": "Custom Scheme: Ethan Editable",
+  "stick_settings": {
+	"flick_threshold": 0.65,
+	"reset_threshold": 0.20,
+	"deadzone": 0.15
+  },
+  "modifiers": {
+	"rotate_cube_modifier": {
+	  "type": "button",
+	  "index": 2
+	},
+	"camera_peek_modifier": {
+	  "type": "button",
+	  "index": 7
+	}
+  },
+  "actions_standard": {
+	"move_r":        {"type": "stick",   "axis": 3, "direction": -1},
+	"move_r_prime":  {"type": "stick",   "axis": 3, "direction":  1},
+	"move_l_prime":  {"type": "stick",   "axis": 1, "direction": -1},
+	"move_l":        {"type": "stick",   "axis": 1, "direction":  1},
+	"move_u":        {"type": "trigger", "axis": 5, "threshold": 0.5},
+	"move_u_prime":  {"type": "trigger", "axis": 4, "threshold": 0.5},
+	"move_f":        {"type": "button",  "index": 10},
+	"move_f_prime":  {"type": "button",  "index": 9},
+	"move_m_prime":  {"type": "button",  "index": 11},
+	"move_m":        {"type": "button",  "index": 12},
+	"move_d_prime":  {"type": "button",  "index": 13},
+	"move_d":        {"type": "button",  "index": 14},
+	"move_b":        {"type": "button",  "index": 3},
+	"move_b_prime":  {"type": "button",  "index": 0},
+	"undo":          {"type": "button",  "index": 1},
+	"start":         {"type": "button",  "index": 15},
+	"select":        {"type": "button",  "index": 16},
+	"home":          {"type": "button",  "index": 17}
+  },
+  "actions_modified_cube_rot": {
+	"rot_x":         {"type": "button",  "index": 11},
+	"rot_x_prime":   {"type": "button",  "index": 12},
+	"rot_y_prime":   {"type": "button",  "index": 13},
+	"rot_y":         {"type": "button",  "index": 14}
+  }
+}

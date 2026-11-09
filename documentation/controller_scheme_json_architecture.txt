@@ -80,9 +80,9 @@ Save file as: res://configs/controls_default.json
 	"move_d":        {"type": "button",  "index": 14},
 	"move_b":        {"type": "button",  "index": 3},
 	"move_b_prime":  {"type": "button",  "index": 0},
-	"undo":          {"type": "button",  "index": 1}
-	"start":          {"type": "button",  "index": 15}
-	"select":          {"type": "button",  "index": 16}
+	"undo":          {"type": "button",  "index": 1},
+	"start":         {"type": "button",  "index": 15},
+	"select":        {"type": "button",  "index": 16},
 	"home":          {"type": "button",  "index": 17}
   },
   "actions_modified_cube_rot": {
@@ -93,13 +93,14 @@ Save file as: res://configs/controls_default.json
   }
 }
 
+
 --------------------------------------------------------------------------------
 [3. CUSTOM SCHEME JSON TEMPLATE (ETHAN EDITABLE)]
 Save file as: user://controls_custom.json
 (On Windows: %APPDATA%\Godot\app_userdata\[Project_Name]\controls_custom.json)
 --------------------------------------------------------------------------------
 {
-  "profile_name": "Custom Scheme: Ethan's Playground",
+  "profile_name": "Custom Scheme: Ethan Editable",
   "stick_settings": {
 	"flick_threshold": 0.65,
 	"reset_threshold": 0.20,
@@ -130,9 +131,9 @@ Save file as: user://controls_custom.json
 	"move_d":        {"type": "button",  "index": 14},
 	"move_b":        {"type": "button",  "index": 3},
 	"move_b_prime":  {"type": "button",  "index": 0},
-	"undo":          {"type": "button",  "index": 1}
-	"start":          {"type": "button",  "index": 15}
-	"select":          {"type": "button",  "index": 16}
+	"undo":          {"type": "button",  "index": 1},
+	"start":         {"type": "button",  "index": 15},
+	"select":        {"type": "button",  "index": 16},
 	"home":          {"type": "button",  "index": 17}
   },
   "actions_modified_cube_rot": {
@@ -142,6 +143,7 @@ Save file as: user://controls_custom.json
 	"rot_y":         {"type": "button",  "index": 14}
   }
 }
+
 
 --------------------------------------------------------------------------------
 [4. READY-TO-PASTE PROMPT FOR ZIVA IN GODOT]
