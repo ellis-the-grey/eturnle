@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://dt7wdno3p7dtk"]
+
+[ext_resource type="LabelSettings" uid="uid://dtrgrp4xxawba" path="res://scenes/ui/hud/hud_popup_label_settings.tres" id="1_aamk8"]
+[ext_resource type="LabelSettings" uid="uid://beavrog6byj1q" path="res://scenes/ui/hud/hud_popup_heading_label_settings.tres" id="1_sp5s3"]
+
+[node name="MainHUD" type="CanvasLayer" unique_id=2137423781]
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=1146011777]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer" unique_id=1106475603]
+layout_mode = 2
+
+[node name="HelloWorld" type="Label" parent="CenterContainer/VBoxContainer" unique_id=1899983968]
+layout_mode = 2
+text = "Holy shit I did it!"
+label_settings = ExtResource("1_sp5s3")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PromptLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=613344479]
+layout_mode = 2
+text = "Welcome to eturnle: magic cube daily practice puzzles"
+label_settings = ExtResource("1_aamk8")
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=94239588]
+layout_mode = 2
+text = "[LMB] will initiate MnK controls
+[OK] button will initiale controller
+
+current iteration does not allow switching of input device after this point"
+label_settings = ExtResource("1_aamk8")
+horizontal_alignment = 1
+vertical_alignment = 1

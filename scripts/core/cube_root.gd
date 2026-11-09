@@ -1,22 +1,33 @@
 extends Node3D
 
 # ==============================================================================
-# SKELETON: CUBE ROOT (SPINE)
+# CUBE ROOT (SPINE)
 # Responsibilities:
 # 1. Environment initialization (Camera, Lights, Background)
 # 2. Procedural spawning of 26 cubies around a (0,0,0) core
 # 3. Piece spatial registry management via Vector3i grid coordinates
-# 4. Input router hook (stubbed for external controller manager)
+# 4. View-relative move execution and physical slice rotation tweening
+# 5. Master move recording track (timestamped notation & orientation)
 # ==============================================================================
 
-# Preload the individual piece scene
 const PIECE_SCENE: PackedScene = preload("res://scenes/core/piece.tscn")
 
 # Lookup table: Vector3i grid position (-1 to 1 per axis) -> Node3D piece instance
 var pieces: Dictionary = {}
 
-# Animation lock: prevents concurrent rotation execution
+# Animation lock & turn speed
 var is_animating: bool = false
+@export var turn_duration: float = 0.25
+
+# Telemetry & Master Move Log
+var move_log: Array[Dictionary] = []
+var session_start_ms: int = 0
+var last_move_ms: int = 0
+
+# View-relative orientation frame
+# Initial: Front (+Z / Green), Right (+X / Orange), Up (+Y / Yellow)
+var orientation_front: Vector3i = Vector3i(0, 0, 1)
+var orientation_right: Vector3i = Vector3i(1, 0, 0)
 
 # Viewport rigging
 var cam_rig: Node3D
@@ -25,79 +36,280 @@ var camera: Camera3D
 # ==============================================================================
 # LIFECYCLE
 # ==============================================================================
-func _ready() -> void:
-	# Step 1: Construct the 3D viewing environment
-	setup_viewport_camera_and_light()
-	
-	# Step 2: Instantiate and position pieces in 3D grid space
-	spawn_cube()
+@onready var controller_manager: ControllerManager = $ControllerManager
 
-func _process(_delta: float) -> void:
-	# Reserved for active timer/animation tick updates in future steps
-	pass
+func _ready() -> void:
+	setup_viewport_camera_and_light()
+	spawn_cube()
+	reset_telemetry_clock()
+	
+	# Pipe controller manager actions directly into the move executor
+	controller_manager.move_requested.connect(execute_move)
+
+func reset_telemetry_clock() -> void:
+	session_start_ms = Time.get_ticks_msec()
+	last_move_ms = session_start_ms
+	move_log.clear()
 
 # ==============================================================================
-# INPUT ROUTING (PLACEHOLDER)
+# INPUT ROUTING & MOVE EXECUTION
 # ==============================================================================
 func _unhandled_input(event: InputEvent) -> void:
-	# Guard: Discard all input signals while a slice tween is resolving
 	if is_animating:
 		return
 	
-	# PLACEHOLDER: Route controller/keyboard signals to execute_move()
-	# This hook will interface directly with controls_default.json / controller_manager
-	handle_raw_input(event)
+	# Temporary debug keys to test execution and logging immediately
+	if event is InputEventKey and event.pressed and not event.echo:
+		match event.keycode:
+			KEY_R:
+				execute_move("move_r_prime" if event.shift_pressed else "move_r")
+			KEY_L:
+				execute_move("move_l_prime" if event.shift_pressed else "move_l")
+			KEY_U:
+				execute_move("move_u_prime" if event.shift_pressed else "move_u")
+			KEY_D:
+				execute_move("move_d_prime" if event.shift_pressed else "move_d")
+			KEY_F:
+				execute_move("move_f_prime" if event.shift_pressed else "move_f")
+			KEY_B:
+				execute_move("move_b_prime" if event.shift_pressed else "move_b")
+			KEY_M:
+				execute_move("move_m_prime" if event.shift_pressed else "move_m")
+			KEY_X:
+				execute_move("rot_x_prime" if event.shift_pressed else "rot_x")
+			KEY_Y:
+				execute_move("rot_y_prime" if event.shift_pressed else "rot_y")
 
-func handle_raw_input(_event: InputEvent) -> void:
-	# STUB: To be implemented in next step (reading mapped JSON actions)
-	pass
+func get_orientation_up() -> Vector3i:
+	return Vector3i(
+		orientation_front.y * orientation_right.z - orientation_front.z * orientation_right.y,
+		orientation_front.z * orientation_right.x - orientation_front.x * orientation_right.z,
+		orientation_front.x * orientation_right.y - orientation_front.y * orientation_right.x
+	)
 
-func execute_move(move_str: String) -> void:
-	# STUB: To be populated with view-relative rotation logic (rotate_layer / rotate_entire_cube)
-	print("Move requested: ", move_str)
+func execute_move(action_id: String) -> void:
+	if is_animating:
+		return
+
+	var is_cube_rot: bool = action_id.begins_with("rot_")
+	var category: String = "cube_rotation" if is_cube_rot else "face_turn"
+
+	if is_cube_rot:
+		_execute_cube_rotation(action_id)
+	else:
+		_execute_face_turn(action_id)
+
+	_record_move(action_id, category)
+
+func _record_move(token: String, category: String) -> void:
+	var now = Time.get_ticks_msec()
+	var elapsed = now - session_start_ms
+	var delta = now - last_move_ms
+	last_move_ms = now
+
+	var record = {
+		"move": token,
+		"category": category,
+		"timestamp_ms": elapsed,
+		"delta_ms": delta,
+		"orientation_front": orientation_front,
+		"orientation_right": orientation_right
+	}
+	move_log.append(record)
+	print("[MOVE LOG] #%d: %s (split: %dms, total: %dms)" % [move_log.size(), token, delta, elapsed])
+
+# ==============================================================================
+# SLICE ROTATION & GRID REMAPPING
+# ==============================================================================
+func _execute_face_turn(action_id: String) -> void:
+	var up = get_orientation_up()
+	var axis: Vector3
+	var layer_coord: int = 1
+	var angle_dir: float = -1.0 # Default clockwise when looking at outer face
+
+	match action_id:
+		"move_r":
+			axis = Vector3(orientation_right); layer_coord = 1; angle_dir = -1.0
+		"move_r_prime":
+			axis = Vector3(orientation_right); layer_coord = 1; angle_dir = 1.0
+		"move_l":
+			axis = Vector3(orientation_right); layer_coord = -1; angle_dir = 1.0
+		"move_l_prime":
+			axis = Vector3(orientation_right); layer_coord = -1; angle_dir = -1.0
+		"move_u":
+			axis = Vector3(up); layer_coord = 1; angle_dir = -1.0
+		"move_u_prime":
+			axis = Vector3(up); layer_coord = 1; angle_dir = 1.0
+		"move_d":
+			axis = Vector3(up); layer_coord = -1; angle_dir = 1.0
+		"move_d_prime":
+			axis = Vector3(up); layer_coord = -1; angle_dir = -1.0
+		"move_f":
+			axis = Vector3(orientation_front); layer_coord = 1; angle_dir = -1.0
+		"move_f_prime":
+			axis = Vector3(orientation_front); layer_coord = 1; angle_dir = 1.0
+		"move_b":
+			axis = Vector3(orientation_front); layer_coord = -1; angle_dir = 1.0
+		"move_b_prime":
+			axis = Vector3(orientation_front); layer_coord = -1; angle_dir = -1.0
+		"move_m":
+			axis = Vector3(orientation_right); layer_coord = 0; angle_dir = 1.0
+		"move_m_prime":
+			axis = Vector3(orientation_right); layer_coord = 0; angle_dir = -1.0
+		_:
+			return
+
+	_rotate_slice(axis, layer_coord, angle_dir * (PI * 0.5))
+
+func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float) -> void:
+	is_animating = true
+	var norm_axis = axis.normalized()
+	var int_axis = Vector3i(round(norm_axis.x), round(norm_axis.y), round(norm_axis.z))
+
+	# Gather the 9 pieces in this plane
+	var affected_coords: Array[Vector3i] = []
+	for coord in pieces.keys():
+		if _coord_on_plane(coord, int_axis, layer_coord):
+			affected_coords.append(coord)
+
+	# Temporary pivot for clean grouped rotation
+	var pivot = Node3D.new()
+	add_child(pivot)
+
+	for c in affected_coords:
+		var p: Node3D = pieces[c]
+		p.reparent(pivot)
+
+	var tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(pivot, "transform", pivot.transform.rotated(norm_axis, angle_rad), turn_duration)
+
+	tween.finished.connect(func():
+		var rot_basis = Basis(norm_axis, angle_rad)
+		var new_entries: Dictionary = {}
+
+		for c in affected_coords:
+			var p: Node3D = pieces[c]
+			p.reparent(self)
+
+			# Compute new grid coordinates using rotated vector rounded to nearest integer
+			var rotated_pos = rot_basis * Vector3(c)
+			var new_coord = Vector3i(round(rotated_pos.x), round(rotated_pos.y), round(rotated_pos.z))
+
+			# Orthonormalize piece transform to eliminate floating point precision drift
+			p.transform = p.transform.orthonormalized()
+			p.position = Vector3(new_coord)
+
+			pieces.erase(c)
+			new_entries[new_coord] = p
+
+		for nc in new_entries.keys():
+			pieces[nc] = new_entries[nc]
+
+		pivot.queue_free()
+		is_animating = false
+	)
+
+func _coord_on_plane(coord: Vector3i, axis: Vector3i, layer: int) -> bool:
+	if axis.x != 0:
+		return coord.x == layer * axis.x
+	if axis.y != 0:
+		return coord.y == layer * axis.y
+	if axis.z != 0:
+		return coord.z == layer * axis.z
+	return false
+
+# ==============================================================================
+# FULL CUBE ROTATIONS
+# ==============================================================================
+# ==============================================================================
+# FULL CUBE ROTATIONS
+# ==============================================================================
+func _execute_cube_rotation(action_id: String) -> void:
+	var global_axis: Vector3
+	var angle_dir: float = -1.0
+	
+	match action_id:
+		"rot_x":
+			global_axis = Vector3.RIGHT; angle_dir = -1.0
+		"rot_x_prime":
+			global_axis = Vector3.RIGHT; angle_dir = 1.0
+		"rot_y":
+			global_axis = Vector3.UP; angle_dir = -1.0
+		"rot_y_prime":
+			global_axis = Vector3.UP; angle_dir = 1.0
+		_:
+			return
+
+	var angle_rad = angle_dir * (PI * 0.5)
+	var rot_basis = Basis(global_axis, angle_rad)
+
+	# Update tracked internal orientation frame
+	var new_f = rot_basis * Vector3(orientation_front)
+	var new_r = rot_basis * Vector3(orientation_right)
+	orientation_front = Vector3i(roundi(new_f.x), roundi(new_f.y), roundi(new_f.z))
+	orientation_right = Vector3i(roundi(new_r.x), roundi(new_r.y), roundi(new_r.z))
+	
+	# Reparent and animate all 26 pieces around the global axis
+	is_animating = true
+	var pivot = Node3D.new()
+	add_child(pivot)
+
+	for p in pieces.values():
+		p.reparent(pivot)
+
+	var tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(pivot, "transform", pivot.transform.rotated(global_axis, angle_rad), turn_duration)
+
+	tween.finished.connect(func():
+		var new_entries: Dictionary = {}
+		for c in pieces.keys():
+			var p: Node3D = pieces[c]
+			p.reparent(self)
+
+			var rotated_pos = rot_basis * Vector3(c)
+			var new_coord = Vector3i(roundi(rotated_pos.x), roundi(rotated_pos.y), roundi(rotated_pos.z))
+
+			p.transform = p.transform.orthonormalized()
+			p.position = Vector3(new_coord)
+			new_entries[new_coord] = p
+
+		pieces = new_entries
+		pivot.queue_free()
+		is_animating = false
+		
+		print("[ORIENTATION] Front: ", orientation_front, " | Right: ", orientation_right, " | Up: ", get_orientation_up())
+	)
 
 # ==============================================================================
 # PROCEDURAL GENERATION & POSITIONING
 # ==============================================================================
 func spawn_cube() -> void:
-	# Clean up any residual pieces before spawning fresh
 	for p in pieces.values():
 		if is_instance_valid(p):
 			p.queue_free()
 	pieces.clear()
 
-	# Iterate across 3D integer lattice: x ∈ [-1, 1], y ∈ [-1, 1], z ∈ [-1, 1]
 	for x in range(-1, 2):
 		for y in range(-1, 2):
 			for z in range(-1, 2):
-				# Skip the internal hidden core piece (0, 0, 0)
 				if x == 0 and y == 0 and z == 0:
 					continue
 				
 				var grid_pos = Vector3i(x, y, z)
 				var piece: Node3D = PIECE_SCENE.instantiate()
-				
-				# Tag piece into the tree and group
 				piece.add_to_group("pieces")
 				add_child(piece)
-				
-				# Align world position directly to initial integer coordinates
 				piece.position = Vector3(grid_pos)
-				
-				# Configure sticker mesh visibility according to outer boundary normals
 				update_stickers(piece, grid_pos)
-				
-				# Register piece in coordinate lookup table
 				pieces[grid_pos] = piece
 
 func update_stickers(piece: Node3D, pos: Vector3i) -> void:
-	# Only outer-facing planes are visible; internal faces remain masked
-	_set_face_vis(piece, "Face_Yellow", pos.y == 1)   # Top (+Y)
-	_set_face_vis(piece, "Face_White",  pos.y == -1)  # Bottom (-Y)
-	_set_face_vis(piece, "Face_Green",  pos.z == 1)   # Front (+Z)
-	_set_face_vis(piece, "Face_Blue",   pos.z == -1)  # Back (-Z)
-	_set_face_vis(piece, "Face_Orange", pos.x == 1)   # Right (+X)
-	_set_face_vis(piece, "Face_Red",    pos.x == -1)  # Left (-X)
+	_set_face_vis(piece, "Face_Yellow", pos.y == 1)
+	_set_face_vis(piece, "Face_White",  pos.y == -1)
+	_set_face_vis(piece, "Face_Green",  pos.z == 1)
+	_set_face_vis(piece, "Face_Blue",   pos.z == -1)
+	_set_face_vis(piece, "Face_Orange", pos.x == 1)
+	_set_face_vis(piece, "Face_Red",    pos.x == -1)
 
 func _set_face_vis(piece: Node3D, face_name: String, show_face: bool) -> void:
 	var face: Node = piece.find_child(face_name, true, false)
@@ -105,10 +317,9 @@ func _set_face_vis(piece: Node3D, face_name: String, show_face: bool) -> void:
 		(face as Node3D).visible = show_face
 
 # ==============================================================================
-# ENVIRONMENT & RENDERING SETUP
+# ENVIRONMENT SETUP
 # ==============================================================================
 func setup_viewport_camera_and_light() -> void:
-	# 1. Camera Mount & Orientation
 	cam_rig = Node3D.new()
 	cam_rig.name = "CamRig"
 	add_child(cam_rig)
@@ -119,11 +330,9 @@ func setup_viewport_camera_and_light() -> void:
 	camera.current = true
 	cam_rig.add_child(camera)
 
-	# Isometric default view angle (displays U, F, R faces simultaneously)
 	cam_rig.rotation.y = deg_to_rad(28.0)
 	cam_rig.rotation.x = deg_to_rad(-24.0)
 
-	# 2. Key Light (Primary highlights and directional shadows)
 	var key_light = DirectionalLight3D.new()
 	key_light.position = Vector3(5.0, 7.0, 4.0)
 	key_light.light_energy = 0.95
@@ -131,7 +340,6 @@ func setup_viewport_camera_and_light() -> void:
 	add_child(key_light)
 	key_light.look_at(Vector3.ZERO, Vector3.UP)
 
-	# 3. Fill Light (Softens opposite side shadow contrast)
 	var fill_light = DirectionalLight3D.new()
 	fill_light.position = Vector3(-5.0, -3.0, -4.0)
 	fill_light.light_energy = 0.4
@@ -139,7 +347,6 @@ func setup_viewport_camera_and_light() -> void:
 	add_child(fill_light)
 	fill_light.look_at(Vector3.ZERO, Vector3.UP)
 
-	# 4. Environment Background & Ambient Shading
 	var env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.11, 0.11, 0.13)

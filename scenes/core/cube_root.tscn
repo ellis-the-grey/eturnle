@@ -1,6 +1,13 @@
 [gd_scene format=3 uid="uid://dbrxep57dvsvy"]
 
 [ext_resource type="Script" uid="uid://sgbarrx77ucl" path="res://scripts/core/cube_root.gd" id="1_ib81i"]
+[ext_resource type="PackedScene" uid="uid://dt7wdno3p7dtk" path="res://scenes/ui/hud/main_hud.tscn" id="2_5jllt"]
+[ext_resource type="Script" uid="uid://i5tbxb4eeqlw" path="res://scripts/input/controller_manager.gd" id="3_hldgl"]
 
 [node name="CubeRoot" type="Node3D" unique_id=1973148647]
 script = ExtResource("1_ib81i")
+
+[node name="MainHUD" parent="." unique_id=2137423781 instance=ExtResource("2_5jllt")]
+
+[node name="ControllerManager" type="Node" parent="." unique_id=2119874188]
+script = ExtResource("3_hldgl")
