@@ -1,0 +1,47 @@
+eturnle/
+├── addons/
+│   └── ziva_agent/
+├── assets/
+│   ├── audio/
+│   └── materials/
+├── configs/
+│   └── profiles/
+├── data/
+│   └── drills/
+├── scenes/
+│   ├── core/
+│   │   ├── cube_root.tscn
+│   │   └── piece.tscn
+│   └── ui/
+│       ├── audio_feedback/
+│       ├── controller_overlay/
+│       ├── debug/
+│       ├── dialogs/
+│       └── hud/
+├── scripts/
+│   ├── autoload/
+│   ├── core/
+│   │   ├── cube_root.gd
+│   │   └── piece.gd
+│   ├── gamemodes/
+│   ├── input/
+│   ├── solver/
+│   ├── ui/
+│   │   ├── audio_feedback/
+│   │   │   └── audio_feedback.gd
+│   │   ├── controller_overlay/
+│   │   │   └── controller_overlay.gd
+│   │   ├── debug/
+│   │   │   └── debug_ui.gd
+│   │   ├── dialogs/
+│   │   │   └── dialog_manager.gd
+│   │   ├── hud/
+│   │   └── main_hud.gd
+│   └── view/
+├── controller_scheme_json_architecture.txt
+├── design scope and planning.txt
+├── export_presets.cfg
+├── file structure.txt
+├── icon.svg
+├── LICENSE
+└── read.me

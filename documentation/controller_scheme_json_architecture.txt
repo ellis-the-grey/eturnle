@@ -1,0 +1,163 @@
+================================================================================
+		   3D CUBE CONTROLLER SCHEME & JSON PROFILE SPECIFICATION
+================================================================================
+
+[OVERVIEW]
+Instead of building a complex in-game remapping UI right away, the game reads 
+control schemes directly from structured JSON configuration files.
+- Default Scheme : Bundled read-only in 'res://configs/controls_default.json'
+- Custom Scheme  : Editable by user in 'user://controls_custom.json'
+- Runtime Toggle : Game loads Default on start; UI button swaps between 
+				   "Default" and "Custom" instantly.
+
+--------------------------------------------------------------------------------
+[1. GODOT 4 GAMEPAD HARDWARE INDEX REFERENCE]
+--------------------------------------------------------------------------------
+Use these numeric indices when editing the JSON files for standard gamepads
+(PlayStation DualSense, Xbox Wireless, Nintendo Pro):
+
+BUTTON INDICES (Godot JoyButton):
+  0  : Cross / A (Bottom face button)
+  1  : Circle / B (Right face button)
+  2  : Square / X (Left face button)
+  3  : Triangle / Y (Top face button)
+  4  : Back / Select / Share
+  5  : Guide / PS Button / Xbox Button
+  6  : Start / Options / Menu
+  7  : L3 (Left Stick Click)
+  8  : R3 (Right Stick Click)
+  9  : L1 / LB (Left Shoulder Bumper)
+  10 : R1 / RB (Right Shoulder Bumper)
+  11 : D-Pad Up
+  12 : D-Pad Down
+  13 : D-Pad Left
+  14 : D-Pad Right
+  15 : Start Button
+  16 : Select Button
+  17 : Home Button
+
+AXIS INDICES (Godot JoyAxis):
+  0 : Left Stick X  (-1.0 = Left,  +1.0 = Right)
+  1 : Left Stick Y  (-1.0 = Up,    +1.0 = Down)
+  2 : Right Stick X (-1.0 = Left,  +1.0 = Right)
+  3 : Right Stick Y (-1.0 = Up,    +1.0 = Down)
+  4 : Left Trigger  (L2 / LT) (0.0 to 1.0)
+  5 : Right Trigger (R2 / RT) (0.0 to 1.0)
+
+--------------------------------------------------------------------------------
+[2. DEFAULT SCHEME JSON TEMPLATE]
+Save file as: res://configs/controls_default.json
+--------------------------------------------------------------------------------
+{
+  "profile_name": "Default Scheme: Attempt Intuitive",
+  "stick_settings": {
+	"flick_threshold": 0.65,
+	"reset_threshold": 0.20,
+	"deadzone": 0.15
+  },
+  "modifiers": {
+	"rotate_cube_modifier": {
+	  "type": "button",
+	  "index": 2
+	},
+	"camera_peek_modifier": {
+	  "type": "button",
+	  "index": 7
+	}
+  },
+  "actions_standard": {
+	"move_r":        {"type": "stick",   "axis": 3, "direction": -1},
+	"move_r_prime":  {"type": "stick",   "axis": 3, "direction":  1},
+	"move_l_prime":  {"type": "stick",   "axis": 1, "direction": -1},
+	"move_l":        {"type": "stick",   "axis": 1, "direction":  1},
+	"move_u":        {"type": "trigger", "axis": 5, "threshold": 0.5},
+	"move_u_prime":  {"type": "trigger", "axis": 4, "threshold": 0.5},
+	"move_f":        {"type": "button",  "index": 10},
+	"move_f_prime":  {"type": "button",  "index": 9},
+	"move_m_prime":  {"type": "button",  "index": 11},
+	"move_m":        {"type": "button",  "index": 12},
+	"move_d_prime":  {"type": "button",  "index": 13},
+	"move_d":        {"type": "button",  "index": 14},
+	"move_b":        {"type": "button",  "index": 3},
+	"move_b_prime":  {"type": "button",  "index": 0},
+	"undo":          {"type": "button",  "index": 1}
+	"start":          {"type": "button",  "index": 15}
+	"select":          {"type": "button",  "index": 16}
+	"home":          {"type": "button",  "index": 17}
+  },
+  "actions_modified_cube_rot": {
+	"rot_x":         {"type": "button",  "index": 11},
+	"rot_x_prime":   {"type": "button",  "index": 12},
+	"rot_y_prime":   {"type": "button",  "index": 13},
+	"rot_y":         {"type": "button",  "index": 14}
+  }
+}
+
+--------------------------------------------------------------------------------
+[3. CUSTOM SCHEME JSON TEMPLATE (ETHAN EDITABLE)]
+Save file as: user://controls_custom.json
+(On Windows: %APPDATA%\Godot\app_userdata\[Project_Name]\controls_custom.json)
+--------------------------------------------------------------------------------
+{
+  "profile_name": "Custom Scheme: Ethan's Playground",
+  "stick_settings": {
+	"flick_threshold": 0.65,
+	"reset_threshold": 0.20,
+	"deadzone": 0.15
+  },
+  "modifiers": {
+	"rotate_cube_modifier": {
+	  "type": "button",
+	  "index": 2
+	},
+	"camera_peek_modifier": {
+	  "type": "button",
+	  "index": 7
+	}
+  },
+  "actions_standard": {
+	"move_r":        {"type": "stick",   "axis": 3, "direction": -1},
+	"move_r_prime":  {"type": "stick",   "axis": 3, "direction":  1},
+	"move_l_prime":  {"type": "stick",   "axis": 1, "direction": -1},
+	"move_l":        {"type": "stick",   "axis": 1, "direction":  1},
+	"move_u":        {"type": "trigger", "axis": 5, "threshold": 0.5},
+	"move_u_prime":  {"type": "trigger", "axis": 4, "threshold": 0.5},
+	"move_f":        {"type": "button",  "index": 10},
+	"move_f_prime":  {"type": "button",  "index": 9},
+	"move_m_prime":  {"type": "button",  "index": 11},
+	"move_m":        {"type": "button",  "index": 12},
+	"move_d_prime":  {"type": "button",  "index": 13},
+	"move_d":        {"type": "button",  "index": 14},
+	"move_b":        {"type": "button",  "index": 3},
+	"move_b_prime":  {"type": "button",  "index": 0},
+	"undo":          {"type": "button",  "index": 1}
+	"start":          {"type": "button",  "index": 15}
+	"select":          {"type": "button",  "index": 16}
+	"home":          {"type": "button",  "index": 17}
+  },
+  "actions_modified_cube_rot": {
+	"rot_x":         {"type": "button",  "index": 11},
+	"rot_x_prime":   {"type": "button",  "index": 12},
+	"rot_y_prime":   {"type": "button",  "index": 13},
+	"rot_y":         {"type": "button",  "index": 14}
+  }
+}
+
+--------------------------------------------------------------------------------
+[4. READY-TO-PASTE PROMPT FOR ZIVA IN GODOT]
+Copy and paste the prompt below into Ziva to have it generate the controller 
+manager and UI button:
+--------------------------------------------------------------------------------
+"Create a controller input manager script at 'res://scripts/input/controller_manager.gd'.
+It should:
+1. Load 'res://configs/controls_default.json' on _ready().
+2. Check if 'user://controls_custom.json' exists. If not, generate a copy of 
+   the default configuration there so the user can easily open and edit it.
+3. Provide a public method `toggle_profile()` and `load_profile(path: String)`.
+4. Parse gamepad inputs in _process() or _input(), respecting stick flick gating 
+   (threshold 0.65, reset 0.20) and modifier states:
+   - While rotate_cube_modifier is held: D-pad triggers full cube rotations (x, x', y, y').
+   - While camera_peek_modifier is held: Right stick orbits camera instead of turning R/R'.
+5. Add a simple Button in 'setup_debug_ui()' labeled 'Profile: Default' that 
+   toggles between Default and Custom schemes when clicked."
+================================================================================
