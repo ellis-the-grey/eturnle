@@ -3,11 +3,20 @@
 [ext_resource type="Script" uid="uid://sgbarrx77ucl" path="res://scripts/core/cube_root.gd" id="1_ib81i"]
 [ext_resource type="PackedScene" uid="uid://dt7wdno3p7dtk" path="res://scenes/ui/hud/main_hud.tscn" id="2_5jllt"]
 [ext_resource type="Script" uid="uid://i5tbxb4eeqlw" path="res://scripts/input/controller_manager.gd" id="3_hldgl"]
+[ext_resource type="Script" uid="uid://cy2jpudiw2mrx" path="res://scripts/ui/main_hud.gd" id="3_yusav"]
+[ext_resource type="Script" uid="uid://c8rp0vdmo3gpf" path="res://scripts/core/mode_manager.gd" id="4_3g5l6"]
 
 [node name="CubeRoot" type="Node3D" unique_id=1973148647]
 script = ExtResource("1_ib81i")
 
-[node name="MainHUD" parent="." unique_id=2137423781 instance=ExtResource("2_5jllt")]
+[node name="MainHUD" parent="." unique_id=2137423781 node_paths=PackedStringArray("controller_manager", "mode_manager", "cube_root") instance=ExtResource("2_5jllt")]
+script = ExtResource("3_yusav")
+controller_manager = NodePath("../ControllerManager")
+mode_manager = NodePath("../ModeManager")
+cube_root = NodePath("..")
 
 [node name="ControllerManager" type="Node" parent="." unique_id=2119874188]
 script = ExtResource("3_hldgl")
+
+[node name="ModeManager" type="Node" parent="." unique_id=2015192391]
+script = ExtResource("4_3g5l6")

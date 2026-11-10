@@ -14,34 +14,59 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0, 0, 0, 0.87058824)
 
-[node name="CenterContainer" type="CenterContainer" parent="PauseOverlay" unique_id=165748138]
+[node name="MarginContainer" type="MarginContainer" parent="PauseOverlay" unique_id=193848030]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 32
 
-[node name="VBoxContainer" type="VBoxContainer" parent="PauseOverlay/CenterContainer" unique_id=1076149061]
+[node name="TopLeft" type="VBoxContainer" parent="PauseOverlay/MarginContainer" unique_id=1403136836]
 layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
 
-[node name="HelloWorld" type="Label" parent="PauseOverlay/CenterContainer/VBoxContainer" unique_id=1899983968]
+[node name="TopLeftLabel" type="Label" parent="PauseOverlay/MarginContainer/TopLeft" unique_id=1899983968]
 layout_mode = 2
-text = "Sphinx of black quartz, judge my vow."
+text = "Top Left Menu:
+Quick Options"
 label_settings = ExtResource("1_sp5s3")
-horizontal_alignment = 1
-vertical_alignment = 1
 
-[node name="PromptLabel" type="Label" parent="PauseOverlay/CenterContainer/VBoxContainer" unique_id=613344479]
+[node name="TopRight" type="VBoxContainer" parent="PauseOverlay/MarginContainer" unique_id=30626498]
 layout_mode = 2
-text = "GET PAUSED BITCH"
-label_settings = ExtResource("1_aamk8")
-horizontal_alignment = 1
-vertical_alignment = 1
+size_flags_horizontal = 8
+size_flags_vertical = 0
 
-[node name="StatusLabel" type="Label" parent="PauseOverlay/CenterContainer/VBoxContainer" unique_id=94239588]
+[node name="TopRightLabel" type="Label" parent="PauseOverlay/MarginContainer/TopRight" unique_id=94239588]
 layout_mode = 2
-text = "Sphinx of black quartz, judge my vow."
+text = "Top Right?"
 label_settings = ExtResource("1_aamk8")
-horizontal_alignment = 1
-vertical_alignment = 1
+horizontal_alignment = 2
+
+[node name="BottomLeft" type="VBoxContainer" parent="PauseOverlay/MarginContainer" unique_id=883204627]
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 8
+
+[node name="BottomLeftLabel" type="Label" parent="PauseOverlay/MarginContainer/BottomLeft" unique_id=613344479]
+layout_mode = 2
+text = "Bottom Left?"
+label_settings = ExtResource("1_aamk8")
+vertical_alignment = 2
+
+[node name="BottomRight" type="VBoxContainer" parent="PauseOverlay/MarginContainer" unique_id=894634777]
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 8
+
+[node name="BottomRightLabel" type="Label" parent="PauseOverlay/MarginContainer/BottomRight" unique_id=651870964]
+layout_mode = 2
+text = "Bottom Right?"
+label_settings = ExtResource("1_aamk8")
+horizontal_alignment = 2
+vertical_alignment = 2
