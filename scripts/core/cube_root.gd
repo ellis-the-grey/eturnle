@@ -200,22 +200,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE:
 			toggle_pause_menu()
-			return
-
-	if is_paused or is_animating:
-		return
-	
-	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_R: execute_move("move_r_prime" if event.shift_pressed else "move_r")
-			KEY_L: execute_move("move_l_prime" if event.shift_pressed else "move_l")
-			KEY_U: execute_move("move_u_prime" if event.shift_pressed else "move_u")
-			KEY_D: execute_move("move_d_prime" if event.shift_pressed else "move_d")
-			KEY_F: execute_move("move_f_prime" if event.shift_pressed else "move_f")
-			KEY_B: execute_move("move_b_prime" if event.shift_pressed else "move_b")
-			KEY_M: execute_move("move_m_prime" if event.shift_pressed else "move_m")
-			KEY_X: execute_move("rot_x_prime" if event.shift_pressed else "rot_x")
-			KEY_Y: execute_move("rot_y_prime" if event.shift_pressed else "rot_y")
 
 func execute_move(action_id: String) -> void:
 	if action_id == "start":
