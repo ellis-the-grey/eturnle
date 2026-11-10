@@ -4,6 +4,14 @@ class_name ControllerManager
 signal move_requested(action_id: String)
 signal profile_changed(profile_name: String)
 
+# Camera peek signals
+signal camera_peek_updated(stick_x: float, stick_y: float, delta: float)
+signal camera_peek_ended()
+
+var was_peeking: bool = false
+var peek_exit_time: int = 0
+@export var peek_cooldown_ms: int = 200 # Global cooldown after releasing L3
+
 @export var config_dir_path: String = "res://configs"
 
 var available_profile_paths: Array[String] = []
@@ -19,20 +27,50 @@ var stick_actions: Array[Dictionary] = []   # Array of {action, axis, direction}
 var trigger_actions: Array[Dictionary] = [] # Array of {action, axis, threshold}
 
 # Thresholds
-var flick_threshold: float = 0.65
-var reset_threshold: float = 0.20
-var deadzone: float = 0.15
+var flick_threshold: float = 0.9  # % deflection to fire
+var reset_threshold: float = 0.2  # Must return to within % of center to re-arm
+var deadzone: float = 0.175       # % central deadband
 
 # State tracking
 var is_active: bool = true
 var modifier_cube_rot_held: bool = false
 var modifier_button_index: int = -1
+var camera_peek_modifier_index: int = -1
 
 # Prevents multiple triggers while an axis is held past threshold
 var axis_latched: Dictionary = {} # int (axis) -> bool
 
 func _ready() -> void:
 	scan_and_load_profiles()
+
+func _process(delta: float) -> void:
+	if not is_active or camera_peek_modifier_index == -1:
+		return
+
+	# Evaluate Camera Peek Modifier (e.g., L3)
+	var is_peeking = Input.is_joy_button_pressed(0, camera_peek_modifier_index)
+
+	if is_peeking:
+		var right_x = Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
+		var right_y = Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+
+		# Apply standard deadzone
+		if abs(right_x) < deadzone: right_x = 0.0
+		if abs(right_y) < deadzone: right_y = 0.0
+
+		camera_peek_updated.emit(right_x, right_y, delta)
+
+		if not was_peeking:
+			was_peeking = true
+			
+		# Return early so the right stick does not trigger slice turns while peeking
+		return
+	else:
+		if was_peeking:
+			was_peeking = false
+			peek_exit_time = Time.get_ticks_msec()
+			camera_peek_ended.emit()
+
 
 # ==============================================================================
 # PROFILE DISCOVERY & LOADING
@@ -94,6 +132,8 @@ func load_profile(path: String) -> bool:
 	stick_actions.clear()
 	trigger_actions.clear()
 	axis_latched.clear()
+	modifier_button_index = -1
+	camera_peek_modifier_index = -1
 
 	# 1. Profile metadata
 	current_profile_name = data.get("profile_name", data.get("name", path.get_file().get_basename()))
@@ -108,8 +148,8 @@ func load_profile(path: String) -> bool:
 	var mod_cfg = data.get("modifiers", {})
 	if mod_cfg.has("rotate_cube_modifier"):
 		modifier_button_index = int(mod_cfg["rotate_cube_modifier"].get("index", -1))
-	else:
-		modifier_button_index = -1
+	if mod_cfg.has("camera_peek_modifier"):
+		camera_peek_modifier_index = int(mod_cfg["camera_peek_modifier"].get("index", -1))
 
 	# 4. Standard Actions
 	var std_cfg = data.get("actions_standard", {})
@@ -167,6 +207,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# --- Joypad Buttons ---
 	if event is InputEventJoypadButton:
+		# Dedicated Start / Options Button (intercepts immediately, even if peeking)
+		if (event.button_index == JOY_BUTTON_START or event.button_index == 6) and event.pressed:
+			move_requested.emit("start")
+			get_viewport().set_input_as_handled()
+			return
+
+		# Block all other button inputs if currently peeking
+		if was_peeking:
+			return
+
 		# Dedicated profile swap (Home / Guide)
 		if event.button_index == JOY_BUTTON_GUIDE and event.pressed:
 			cycle_profile()
@@ -192,8 +242,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 
+	# Block analog slice/trigger motion while peeking
+	if was_peeking:
+		return
+
 	# --- Joypad Motion (Sticks & Analog Triggers) ---
-	elif event is InputEventJoypadMotion:
+	if event is InputEventJoypadMotion:
 		_handle_joypad_motion(event.axis, event.axis_value)
 
 	# --- Keyboard Fallback ---
@@ -223,6 +277,10 @@ func _handle_joypad_motion(axis: int, value: float) -> void:
 			if aligned_val >= flick_threshold:
 				if not axis_latched.get(latch_key, false):
 					axis_latched[latch_key] = true
-					move_requested.emit(stick.action)
+					
+					# Global ghost flick suppression check
+					if Time.get_ticks_msec() - peek_exit_time >= peek_cooldown_ms:
+						move_requested.emit(stick.action)
+
 			elif aligned_val < reset_threshold:
 				axis_latched[latch_key] = false

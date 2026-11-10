@@ -30,10 +30,10 @@
 	"move_d":        {"type": "button",  "index": 14},
 	"move_b":        {"type": "button",  "index": 3},
 	"move_b_prime":  {"type": "button",  "index": 0},
-	"undo":          {"type": "button",  "index": 1},
-	"start":         {"type": "button",  "index": 15},
-	"select":        {"type": "button",  "index": 16},
-	"home":          {"type": "button",  "index": 17}
+	"cancel":        {"type": "button",  "index": 1},
+	"start":         {"type": "button",  "index": 6},
+	"select":        {"type": "button",  "index": 4},
+	"home":          {"type": "button",  "index": 5}
   },
   "actions_modified_cube_rot": {
 	"rot_x":         {"type": "button",  "index": 11},

@@ -5,33 +5,43 @@
 
 [node name="MainHUD" type="CanvasLayer" unique_id=2137423781]
 
-[node name="CenterContainer" type="CenterContainer" parent="." unique_id=1146011777]
+[node name="PauseOverlay" type="ColorRect" parent="." unique_id=462796752]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.87058824)
+
+[node name="CenterContainer" type="CenterContainer" parent="PauseOverlay" unique_id=165748138]
+layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer" unique_id=1106475603]
+[node name="VBoxContainer" type="VBoxContainer" parent="PauseOverlay/CenterContainer" unique_id=1076149061]
 layout_mode = 2
 
-[node name="HelloWorld" type="Label" parent="CenterContainer/VBoxContainer" unique_id=1899983968]
+[node name="HelloWorld" type="Label" parent="PauseOverlay/CenterContainer/VBoxContainer" unique_id=1899983968]
 layout_mode = 2
-text = "Holy shit I did it!"
+text = "Sphinx of black quartz, judge my vow."
 label_settings = ExtResource("1_sp5s3")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="PromptLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=613344479]
+[node name="PromptLabel" type="Label" parent="PauseOverlay/CenterContainer/VBoxContainer" unique_id=613344479]
 layout_mode = 2
-text = "Text!"
+text = "GET PAUSED BITCH"
 label_settings = ExtResource("1_aamk8")
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=94239588]
+[node name="StatusLabel" type="Label" parent="PauseOverlay/CenterContainer/VBoxContainer" unique_id=94239588]
 layout_mode = 2
-text = "Holy shit moar text"
+text = "Sphinx of black quartz, judge my vow."
 label_settings = ExtResource("1_aamk8")
 horizontal_alignment = 1
 vertical_alignment = 1

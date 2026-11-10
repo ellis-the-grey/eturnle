@@ -5,8 +5,10 @@ class_name CubeRoot
 # CUBE ROOT (SPINE)
 # Core Responsibilities:
 # 1. Piece spatial registry & lifecycle
-# 2. View-relative coordinate orientation frame
-# 3. Kinematic slice tweens and whole-cube pivots
+# 2. View-relative screen-locked slice execution
+# 3. Dynamic orientation frame & color mapping for WCA logging
+# 4. Camera rig orbit handling for free-look
+# 5. Pause menu overlay state management
 # ==============================================================================
 
 const PIECE_SCENE: PackedScene = preload("res://scenes/core/piece.tscn")
@@ -15,17 +17,54 @@ var pieces: Dictionary = {}
 var is_animating: bool = false
 @export var turn_duration: float = 0.25
 
-# View-relative orientation frame
+# Initial face mapping (Vector3i world normal -> Color name)
+var color_scheme: Dictionary = {
+	Vector3i(0, 0, 1): "Green",
+	Vector3i(0, 0, -1): "Blue",
+	Vector3i(1, 0, 0): "Orange",
+	Vector3i(-1, 0, 0): "Red",
+	Vector3i(0, 1, 0): "Yellow",
+	Vector3i(0, -1, 0): "White"
+}
+
 var orientation_front: Vector3i = Vector3i(0, 0, 1)
 var orientation_right: Vector3i = Vector3i(1, 0, 0)
 
 @onready var controller_manager: ControllerManager = $ControllerManager
+@onready var pause_overlay: Control = $MainHUD/PauseOverlay
 var move_logger: MoveLogger
 
-func _ready() -> void:
-	CubeEnvironment.setup(self)
+var is_paused: bool = false
 
-	# Fetch existing child node or create instance dynamically
+# ==============================================================================
+# CAMERA FREE-LOOK SETTINGS
+# ==============================================================================
+var cam_rig: Node3D
+var peek_tween: Tween
+
+@export_group("Free Look (Camera Orbit)")
+@export var peek_speed: float = 384.0
+@export var peek_snap_duration: float = 0.15
+
+# Absolute symmetrical limits relative to the Cube's true axes
+@export var absolute_yaw_limit: float = 128.0  # Symmetrical left/right visibility
+@export var absolute_pitch_limit: float = 128.0 # Prevents gimbal lock at the top/bottom poles
+
+@export var invert_peek_x: bool = true
+@export var invert_peek_y: bool = true
+
+# Dynamically captured home view angles
+var base_cam_yaw: float = 0.0
+var base_cam_pitch: float = 0.0
+
+func _ready() -> void:
+	var env_data = CubeEnvironment.setup(self)
+	cam_rig = env_data["cam_rig"]
+
+	# Dynamically capture starting angles from environment
+	base_cam_yaw = rad_to_deg(cam_rig.rotation.y)
+	base_cam_pitch = rad_to_deg(cam_rig.rotation.x)
+
 	if has_node("MoveLogger"):
 		move_logger = $MoveLogger
 	else:
@@ -35,7 +74,14 @@ func _ready() -> void:
 
 	spawn_cube()
 	move_logger.reset_clock()
+
 	controller_manager.move_requested.connect(execute_move)
+	controller_manager.camera_peek_updated.connect(_on_free_look_updated)
+	controller_manager.camera_peek_ended.connect(_on_free_look_ended)
+
+	# Ensure pause overlay starts hidden
+	if pause_overlay:
+		pause_overlay.visible = false
 
 func spawn_cube() -> void:
 	for p in pieces.values():
@@ -45,10 +91,118 @@ func spawn_cube() -> void:
 	pieces = CubeSpawner.spawn(self, PIECE_SCENE)
 
 # ==============================================================================
+# FREE-LOOK (CAMERA ORBIT)
+# ==============================================================================
+func _on_free_look_updated(stick_x: float, stick_y: float, delta: float) -> void:
+	if is_paused:
+		return
+
+	if peek_tween and peek_tween.is_running():
+		peek_tween.kill()
+
+	var mult_x = -1.0 if invert_peek_x else 1.0
+	var mult_y = -1.0 if invert_peek_y else 1.0
+
+	var current_yaw = rad_to_deg(cam_rig.rotation.y)
+	var current_pitch = rad_to_deg(cam_rig.rotation.x)
+
+	current_yaw += stick_x * peek_speed * delta * mult_x
+	current_pitch += stick_y * peek_speed * delta * mult_y
+
+	# Clamp rotation around the Cube's 0.0 center to ensure symmetrical view limits
+	current_yaw = clamp(current_yaw, -absolute_yaw_limit, absolute_yaw_limit)
+	current_pitch = clamp(current_pitch, -absolute_pitch_limit, absolute_pitch_limit)
+
+	cam_rig.rotation.y = deg_to_rad(current_yaw)
+	cam_rig.rotation.x = deg_to_rad(current_pitch)
+	cam_rig.rotation.z = 0.0 # Force lock horizon
+
+func _on_free_look_ended() -> void:
+	if peek_tween and peek_tween.is_running():
+		peek_tween.kill()
+
+	# Snap back to the dynamically captured home position
+	peek_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	peek_tween.tween_property(
+		cam_rig, 
+		"rotation", 
+		Vector3(deg_to_rad(base_cam_pitch), deg_to_rad(base_cam_yaw), 0.0), 
+		peek_snap_duration
+	)
+
+# ==============================================================================
+# PAUSE MENU HANDLING
+# ==============================================================================
+func toggle_pause_menu() -> void:
+	is_paused = !is_paused
+	if pause_overlay:
+		pause_overlay.visible = is_paused
+
+	# Snap camera back immediately if paused while peeking
+	if is_paused and controller_manager.was_peeking:
+		_on_free_look_ended()
+
+# ==============================================================================
+# ORIENTATION & NOTATION RESOLUTION
+# ==============================================================================
+func get_orientation_up() -> Vector3i:
+	return Vector3i(
+		orientation_front.y * orientation_right.z - orientation_front.z * orientation_right.y,
+		orientation_front.z * orientation_right.x - orientation_front.x * orientation_right.z,
+		orientation_front.x * orientation_right.y - orientation_front.y * orientation_right.x
+	)
+
+func get_front_color() -> String:
+	return color_scheme.get(orientation_front, "Unknown")
+
+func get_right_color() -> String:
+	return color_scheme.get(orientation_right, "Unknown")
+
+func get_up_color() -> String:
+	return color_scheme.get(get_orientation_up(), "Unknown")
+
+func resolve_wca_notation(action_id: String) -> String:
+	var up = get_orientation_up()
+	
+	match action_id:
+		"rot_x": return "x"
+		"rot_x_prime": return "x'"
+		"rot_y": return "y"
+		"rot_y_prime": return "y'"
+		"move_m": return "M"
+		"move_m_prime": return "M'"
+		_: pass
+
+	var screen_axis: Vector3i = Vector3i.ZERO
+	var is_prime: bool = action_id.ends_with("_prime")
+
+	if action_id.begins_with("move_r"): screen_axis = Vector3i(1, 0, 0)
+	elif action_id.begins_with("move_l"): screen_axis = Vector3i(-1, 0, 0)
+	elif action_id.begins_with("move_u"): screen_axis = Vector3i(0, 1, 0)
+	elif action_id.begins_with("move_d"): screen_axis = Vector3i(0, -1, 0)
+	elif action_id.begins_with("move_f"): screen_axis = Vector3i(0, 0, 1)
+	elif action_id.begins_with("move_b"): screen_axis = Vector3i(0, 0, -1)
+
+	var base_letter: String = "?"
+	if screen_axis == orientation_front: base_letter = "F"
+	elif screen_axis == -orientation_front: base_letter = "B"
+	elif screen_axis == orientation_right: base_letter = "R"
+	elif screen_axis == -orientation_right: base_letter = "L"
+	elif screen_axis == up: base_letter = "U"
+	elif screen_axis == -up: base_letter = "D"
+
+	return base_letter + ("'" if is_prime else "")
+
+# ==============================================================================
 # INPUT ROUTING & EXECUTION
 # ==============================================================================
 func _unhandled_input(event: InputEvent) -> void:
-	if is_animating:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_ESCAPE:
+			toggle_pause_menu()
+			return
+
+	if is_paused or is_animating:
 		return
 	
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -63,51 +217,52 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_X: execute_move("rot_x_prime" if event.shift_pressed else "rot_x")
 			KEY_Y: execute_move("rot_y_prime" if event.shift_pressed else "rot_y")
 
-func get_orientation_up() -> Vector3i:
-	return Vector3i(
-		orientation_front.y * orientation_right.z - orientation_front.z * orientation_right.y,
-		orientation_front.z * orientation_right.x - orientation_front.x * orientation_right.z,
-		orientation_front.x * orientation_right.y - orientation_front.y * orientation_right.x
-	)
-
 func execute_move(action_id: String) -> void:
-	if is_animating:
+	if action_id == "start":
+		toggle_pause_menu()
+		return
+
+	if action_id == "cancel" and is_paused:
+		toggle_pause_menu()
+		return
+
+	if is_paused or is_animating:
 		return
 
 	var is_cube_rot: bool = action_id.begins_with("rot_")
 	var category: String = "cube_rotation" if is_cube_rot else "face_turn"
+	var wca_token: String = resolve_wca_notation(action_id)
 
 	if is_cube_rot:
 		_execute_cube_rotation(action_id)
 	else:
 		_execute_face_turn(action_id)
 
-	move_logger.record_move(action_id, category, orientation_front, orientation_right)
+	move_logger.record_move(action_id, category, wca_token, get_front_color(), get_right_color())
 
 # ==============================================================================
-# SLICE ROTATION & GRID REMAPPING
+# SLICE ROTATION (VIEW-RELATIVE / SCREEN LOCKED)
 # ==============================================================================
 func _execute_face_turn(action_id: String) -> void:
-	var up = get_orientation_up()
 	var axis: Vector3
 	var layer_coord: int = 1
 	var angle_dir: float = -1.0
 
 	match action_id:
-		"move_r":       axis = Vector3(orientation_right); layer_coord =  1; angle_dir = -1.0
-		"move_r_prime": axis = Vector3(orientation_right); layer_coord =  1; angle_dir =  1.0
-		"move_l":       axis = Vector3(orientation_right); layer_coord = -1; angle_dir =  1.0
-		"move_l_prime": axis = Vector3(orientation_right); layer_coord = -1; angle_dir = -1.0
-		"move_u":       axis = Vector3(up);                layer_coord =  1; angle_dir = -1.0
-		"move_u_prime": axis = Vector3(up);                layer_coord =  1; angle_dir =  1.0
-		"move_d":       axis = Vector3(up);                layer_coord = -1; angle_dir =  1.0
-		"move_d_prime": axis = Vector3(up);                layer_coord = -1; angle_dir = -1.0
-		"move_f":       axis = Vector3(orientation_front); layer_coord =  1; angle_dir = -1.0
-		"move_f_prime": axis = Vector3(orientation_front); layer_coord =  1; angle_dir =  1.0
-		"move_b":       axis = Vector3(orientation_front); layer_coord = -1; angle_dir =  1.0
-		"move_b_prime": axis = Vector3(orientation_front); layer_coord = -1; angle_dir = -1.0
-		"move_m":       axis = Vector3(orientation_right); layer_coord =  0; angle_dir =  1.0
-		"move_m_prime": axis = Vector3(orientation_right); layer_coord =  0; angle_dir = -1.0
+		"move_r":       axis = Vector3.RIGHT; layer_coord =  1; angle_dir = -1.0
+		"move_r_prime": axis = Vector3.RIGHT; layer_coord =  1; angle_dir =  1.0
+		"move_l":       axis = Vector3.RIGHT; layer_coord = -1; angle_dir =  1.0
+		"move_l_prime": axis = Vector3.RIGHT; layer_coord = -1; angle_dir = -1.0
+		"move_u":       axis = Vector3.UP;    layer_coord =  1; angle_dir = -1.0
+		"move_u_prime": axis = Vector3.UP;    layer_coord =  1; angle_dir =  1.0
+		"move_d":       axis = Vector3.UP;    layer_coord = -1; angle_dir =  1.0
+		"move_d_prime": axis = Vector3.UP;    layer_coord = -1; angle_dir = -1.0
+		"move_f":       axis = Vector3.BACK;  layer_coord =  1; angle_dir = -1.0
+		"move_f_prime": axis = Vector3.BACK;  layer_coord =  1; angle_dir =  1.0
+		"move_b":       axis = Vector3.BACK;  layer_coord = -1; angle_dir =  1.0
+		"move_b_prime": axis = Vector3.BACK;  layer_coord = -1; angle_dir = -1.0
+		"move_m":       axis = Vector3.RIGHT; layer_coord =  0; angle_dir =  1.0
+		"move_m_prime": axis = Vector3.RIGHT; layer_coord =  0; angle_dir = -1.0
 		_: return
 
 	_rotate_slice(axis, layer_coord, angle_dir * (PI * 0.5))
@@ -115,7 +270,7 @@ func _execute_face_turn(action_id: String) -> void:
 func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float) -> void:
 	is_animating = true
 	var norm_axis = axis.normalized()
-	var int_axis = Vector3i(round(norm_axis.x), round(norm_axis.y), round(norm_axis.z))
+	var int_axis = Vector3i(roundi(norm_axis.x), roundi(norm_axis.y), roundi(norm_axis.z))
 
 	var affected_coords: Array[Vector3i] = []
 	for coord in pieces.keys():
@@ -140,7 +295,7 @@ func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float) -> void:
 			p.reparent(self)
 
 			var rotated_pos = rot_basis * Vector3(c)
-			var new_coord = Vector3i(round(rotated_pos.x), round(rotated_pos.y), round(rotated_pos.z))
+			var new_coord = Vector3i(roundi(rotated_pos.x), roundi(rotated_pos.y), roundi(rotated_pos.z))
 
 			p.transform = p.transform.orthonormalized()
 			p.position = Vector3(new_coord)
@@ -171,8 +326,8 @@ func _execute_cube_rotation(action_id: String) -> void:
 	match action_id:
 		"rot_x":       global_axis = Vector3.RIGHT; angle_dir = -1.0
 		"rot_x_prime": global_axis = Vector3.RIGHT; angle_dir =  1.0
-		"rot_y":       global_axis = Vector3.UP;    angle_dir = -1.0
-		"rot_y_prime": global_axis = Vector3.UP;    angle_dir =  1.0
+		"rot_y":       global_axis = Vector3.UP;    angle_dir =  1.0
+		"rot_y_prime": global_axis = Vector3.UP;    angle_dir = -1.0
 		_: return
 
 	var angle_rad = angle_dir * (PI * 0.5)
