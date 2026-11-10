@@ -1,0 +1,42 @@
+{
+  "profile_name": "Keyboard: Controller Mirror",
+  "modifiers": {
+	"rotate_cube_modifier": {
+	  "type": "key",
+	  "name": "Shift",
+	  "location": 1
+	},
+	"camera_peek_modifier": {
+	  "type": "mouse_button",
+	  "index": 3
+	}
+  },
+  "actions_standard": {
+	"start":         {"type": "key", "name": "Escape"},
+	"cancel":        {"type": "key", "name": "Shift", "location": 2},
+	"reset":         {"type": "key", "name": "Tab"},
+	"select":        {"type": "key", "name": "Ctrl", "location": 1},
+
+	"move_m_prime":  {"type": "key", "name": "Up"},
+	"move_m":        {"type": "key", "name": "Down"},
+	"move_d_prime":  {"type": "key", "name": "Left"},
+	"move_d":        {"type": "key", "name": "Right"},
+
+	"move_r":        {"type": "key", "name": "I"},
+	"move_r_prime":  {"type": "key", "name": "K"},
+	"move_l":        {"type": "key", "name": "D"},
+	"move_l_prime":  {"type": "key", "name": "E"},
+	"move_u":        {"type": "key", "name": "J"},
+	"move_u_prime":  {"type": "key", "name": "F"},
+	"move_f":        {"type": "key", "name": "H"},
+	"move_f_prime":  {"type": "key", "name": "G"},
+	"move_b":        {"type": "key", "name": "W"},
+	"move_b_prime":  {"type": "key", "name": "O"}
+  },
+  "actions_modified_cube_rot": {
+	"rot_x":         {"type": "key", "name": "Up"},
+	"rot_x_prime":   {"type": "key", "name": "Down"},
+	"rot_y_prime":   {"type": "key", "name": "Left"},
+	"rot_y":         {"type": "key", "name": "Right"}
+  }
+}

@@ -9,8 +9,10 @@ signal camera_peek_updated(stick_x: float, stick_y: float, delta: float)
 signal camera_peek_ended()
 
 var was_peeking: bool = false
+var is_mouse_peeking: bool = false
 var peek_exit_time: int = 0
-@export var peek_cooldown_ms: int = 200 # Global cooldown after releasing L3
+@export var peek_cooldown_ms: int = 200 # Global cooldown after releasing L3 or MMB
+@export var mouse_peek_sensitivity: float = 0.05
 
 @export var config_dir_path: String = "res://configs"
 
@@ -18,9 +20,13 @@ var available_profile_paths: Array[String] = []
 var current_profile_index: int = 0
 var current_profile_name: String = ""
 
-# Parsed mappings: int (button_index) -> String (action_id)
+# Parsed gamepad mappings: int (button_index) -> String (action_id)
 var button_standard_map: Dictionary = {}
 var button_modified_cube_rot_map: Dictionary = {}
+
+# Parsed keyboard mappings: "keycode:location" -> String (action_id)
+var key_standard_map: Dictionary = {}
+var key_modified_cube_rot_map: Dictionary = {}
 
 # Stick & Trigger configs
 var stick_actions: Array[Dictionary] = []   # Array of {action, axis, direction}
@@ -33,26 +39,46 @@ var deadzone: float = 0.175       # % central deadband
 
 # State tracking
 var is_active: bool = true
+var active_joy_id: int = 0
 var modifier_cube_rot_held: bool = false
+
 var modifier_button_index: int = -1
-var camera_peek_modifier_index: int = -1
+var modifier_key_code: int = -1
+var modifier_key_location: int = 0
+
+var camera_peek_joy_index: int = -1
+var camera_peek_mouse_button: int = -1
 
 # Prevents multiple triggers while an axis is held past threshold
 var axis_latched: Dictionary = {} # int (axis) -> bool
 
 func _ready() -> void:
+	# Track physical connection events to resolve browser index shifting
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
+	var connected = Input.get_connected_joypads()
+	if not connected.is_empty():
+		active_joy_id = connected[0]
+
 	scan_and_load_profiles()
 
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	if connected:
+		active_joy_id = device
+		print("[ControllerManager] Joypad connected: %d (%s)" % [device, Input.get_joy_name(device)])
+	elif device == active_joy_id:
+		var remaining = Input.get_connected_joypads()
+		active_joy_id = remaining[0] if not remaining.is_empty() else 0
+
 func _process(delta: float) -> void:
-	if not is_active or camera_peek_modifier_index == -1:
+	if not is_active or is_mouse_peeking:
 		return
 
-	# Evaluate Camera Peek Modifier (e.g., L3)
-	var is_peeking = Input.is_joy_button_pressed(0, camera_peek_modifier_index)
+	# Evaluate Joypad Camera Peek Modifier (e.g., L3)
+	var is_joy_peeking = (camera_peek_joy_index != -1 and Input.is_joy_button_pressed(active_joy_id, camera_peek_joy_index))
 
-	if is_peeking:
-		var right_x = Input.get_joy_axis(0, JOY_AXIS_RIGHT_X)
-		var right_y = Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+	if is_joy_peeking:
+		var right_x = Input.get_joy_axis(active_joy_id, JOY_AXIS_RIGHT_X)
+		var right_y = Input.get_joy_axis(active_joy_id, JOY_AXIS_RIGHT_Y)
 
 		# Apply standard deadzone
 		if abs(right_x) < deadzone: right_x = 0.0
@@ -62,15 +88,12 @@ func _process(delta: float) -> void:
 
 		if not was_peeking:
 			was_peeking = true
-			
-		# Return early so the right stick does not trigger slice turns while peeking
 		return
 	else:
-		if was_peeking:
+		if was_peeking and not is_mouse_peeking:
 			was_peeking = false
 			peek_exit_time = Time.get_ticks_msec()
 			camera_peek_ended.emit()
-
 
 # ==============================================================================
 # PROFILE DISCOVERY & LOADING
@@ -126,14 +149,27 @@ func load_profile(path: String) -> bool:
 	if not data is Dictionary:
 		return false
 
-	# Reset maps
+	# Reset state and lookup maps
 	button_standard_map.clear()
 	button_modified_cube_rot_map.clear()
+	key_standard_map.clear()
+	key_modified_cube_rot_map.clear()
 	stick_actions.clear()
 	trigger_actions.clear()
 	axis_latched.clear()
+
+	modifier_cube_rot_held = false
 	modifier_button_index = -1
-	camera_peek_modifier_index = -1
+	modifier_key_code = -1
+	modifier_key_location = 0
+
+	camera_peek_joy_index = -1
+	camera_peek_mouse_button = -1
+
+	if is_mouse_peeking:
+		is_mouse_peeking = false
+		was_peeking = false
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 	# 1. Profile metadata
 	current_profile_name = data.get("profile_name", data.get("name", path.get_file().get_basename()))
@@ -147,27 +183,40 @@ func load_profile(path: String) -> bool:
 	# 3. Modifiers
 	var mod_cfg = data.get("modifiers", {})
 	if mod_cfg.has("rotate_cube_modifier"):
-		modifier_button_index = int(mod_cfg["rotate_cube_modifier"].get("index", -1))
+		var r_mod = mod_cfg["rotate_cube_modifier"]
+		if r_mod is Dictionary:
+			match r_mod.get("type", ""):
+				"button":
+					modifier_button_index = int(r_mod.get("index", -1))
+				"key":
+					modifier_key_code = OS.find_keycode_from_string(r_mod.get("name", ""))
+					modifier_key_location = int(r_mod.get("location", 0))
+
 	if mod_cfg.has("camera_peek_modifier"):
-		camera_peek_modifier_index = int(mod_cfg["camera_peek_modifier"].get("index", -1))
+		var c_mod = mod_cfg["camera_peek_modifier"]
+		if c_mod is Dictionary:
+			match c_mod.get("type", ""):
+				"button":
+					camera_peek_joy_index = int(c_mod.get("index", -1))
+				"mouse_button":
+					camera_peek_mouse_button = int(c_mod.get("index", -1))
 
 	# 4. Standard Actions
-	var std_cfg = data.get("actions_standard", {})
-	_parse_action_group(std_cfg, button_standard_map)
+	_parse_action_group(data.get("actions_standard", {}), button_standard_map, key_standard_map)
 
 	# 5. Modified Cube Rot Actions
-	var rot_cfg = data.get("actions_modified_cube_rot", {})
-	_parse_action_group(rot_cfg, button_modified_cube_rot_map)
+	_parse_action_group(data.get("actions_modified_cube_rot", {}), button_modified_cube_rot_map, key_modified_cube_rot_map)
 
 	profile_changed.emit(current_profile_name)
-	print("[ControllerManager] Loaded: '%s' | %d buttons, %d stick/triggers" % [
+	print("[ControllerManager] Loaded: '%s' | Buttons: %d, Keys: %d, Stick/Trig: %d" % [
 		current_profile_name,
 		button_standard_map.size(),
+		key_standard_map.size(),
 		stick_actions.size() + trigger_actions.size()
 	])
 	return true
 
-func _parse_action_group(actions_dict: Dictionary, target_btn_map: Dictionary) -> void:
+func _parse_action_group(actions_dict: Dictionary, target_btn_map: Dictionary, target_key_map: Dictionary) -> void:
 	for action_name in actions_dict.keys():
 		var entry = actions_dict[action_name]
 		if not entry is Dictionary:
@@ -179,6 +228,11 @@ func _parse_action_group(actions_dict: Dictionary, target_btn_map: Dictionary) -
 				var btn_idx = int(entry.get("index", -1))
 				if btn_idx >= 0:
 					target_btn_map[btn_idx] = action_name
+			"key":
+				var code = OS.find_keycode_from_string(entry.get("name", ""))
+				var loc = int(entry.get("location", 0))
+				if code != KEY_NONE:
+					target_key_map["%d:%d" % [code, loc]] = action_name
 			"stick":
 				stick_actions.append({
 					"action": action_name,
@@ -205,16 +259,66 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_active:
 		return
 
+	# --- Mouse Peek (MMB Hold & Motion) ---
+	if event is InputEventMouseButton and camera_peek_mouse_button != -1 and event.button_index == camera_peek_mouse_button:
+		is_mouse_peeking = event.pressed
+		if is_mouse_peeking:
+			was_peeking = true
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		else:
+			was_peeking = false
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			peek_exit_time = Time.get_ticks_msec()
+			camera_peek_ended.emit()
+		get_viewport().set_input_as_handled()
+		return
+
+	if event is InputEventMouseMotion and is_mouse_peeking:
+		var delta = get_process_delta_time()
+		camera_peek_updated.emit(event.relative.x * mouse_peek_sensitivity, event.relative.y * mouse_peek_sensitivity, delta)
+		get_viewport().set_input_as_handled()
+		return
+
+	# Suppress normal input while in camera peek mode
+	if was_peeking:
+		return
+
+	# --- Keyboard Handling ---
+	if event is InputEventKey:
+		# Check rotation modifier key (e.g., Left Shift hold)
+		if modifier_key_code != -1 and event.keycode == modifier_key_code:
+			if modifier_key_location == 0 or event.location == modifier_key_location:
+				modifier_cube_rot_held = event.pressed
+				get_viewport().set_input_as_handled()
+				return
+
+		# Action Dispatch
+		if event.pressed and not event.echo:
+			var specific_key = "%d:%d" % [event.keycode, event.location]
+			var generic_key = "%d:0" % event.keycode
+
+			var active_map = key_modified_cube_rot_map if modifier_cube_rot_held else key_standard_map
+			var action = active_map.get(specific_key, active_map.get(generic_key, ""))
+
+			if action != "":
+				move_requested.emit(action)
+				get_viewport().set_input_as_handled()
+				return
+
+			# Unmapped Tab key falls back to profile cycling
+			if event.keycode == KEY_TAB:
+				cycle_profile()
+				get_viewport().set_input_as_handled()
+				return
+
 	# --- Joypad Buttons ---
 	if event is InputEventJoypadButton:
-		# Dedicated Start / Options Button (intercepts immediately, even if peeking)
+		active_joy_id = event.device
+
+		# Dedicated Start / Options Button (intercepts immediately)
 		if (event.button_index == JOY_BUTTON_START or event.button_index == 6) and event.pressed:
 			move_requested.emit("start")
 			get_viewport().set_input_as_handled()
-			return
-
-		# Block all other button inputs if currently peeking
-		if was_peeking:
 			return
 
 		# Dedicated profile swap (Home / Guide)
@@ -231,30 +335,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		# Action Dispatch
 		if event.pressed:
-			# Check modifier layer first if held
-			if modifier_cube_rot_held and button_modified_cube_rot_map.has(event.button_index):
-				move_requested.emit(button_modified_cube_rot_map[event.button_index])
+			var map = button_modified_cube_rot_map if modifier_cube_rot_held else button_standard_map
+			if map.has(event.button_index):
+				move_requested.emit(map[event.button_index])
 				get_viewport().set_input_as_handled()
 				return
-
-			if button_standard_map.has(event.button_index):
-				move_requested.emit(button_standard_map[event.button_index])
-				get_viewport().set_input_as_handled()
-				return
-
-	# Block analog slice/trigger motion while peeking
-	if was_peeking:
-		return
 
 	# --- Joypad Motion (Sticks & Analog Triggers) ---
-	if event is InputEventJoypadMotion:
+	elif event is InputEventJoypadMotion:
+		active_joy_id = event.device
 		_handle_joypad_motion(event.axis, event.axis_value)
-
-	# --- Keyboard Fallback ---
-	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_TAB:
-			cycle_profile()
-			get_viewport().set_input_as_handled()
 
 func _handle_joypad_motion(axis: int, value: float) -> void:
 	# 1. Triggers
