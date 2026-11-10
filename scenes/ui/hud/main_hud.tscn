@@ -24,17 +24,14 @@ vertical_alignment = 1
 
 [node name="PromptLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=613344479]
 layout_mode = 2
-text = "Welcome to eturnle: magic cube daily practice puzzles"
+text = "Text!"
 label_settings = ExtResource("1_aamk8")
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="StatusLabel" type="Label" parent="CenterContainer/VBoxContainer" unique_id=94239588]
 layout_mode = 2
-text = "[LMB] will initiate MnK controls
-[OK] button will initiale controller
-
-current iteration does not allow switching of input device after this point"
+text = "Holy shit moar text"
 label_settings = ExtResource("1_aamk8")
 horizontal_alignment = 1
 vertical_alignment = 1
