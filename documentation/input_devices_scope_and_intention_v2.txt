@@ -1,0 +1,213 @@
+# Specification & Evolution of Cube Input Architecture
+
+## 1. Primitive Baseline: 1-to-1 Rigid Synchronous Mappings
+
+### 1.1 Intent
+
+The baseline control schemes (Mouse & Keyboard and initial Controller profiles) were engineered for direct, deterministic parity with World Cube Association (WCA) notation ($U, D, L, R, F, B$). Each physical digital switch or cardinal stick deflection maps directly to an instantaneous $90^\circ$ slice rotation.
+
+### 1.2 Strengths
+
+* **Deterministic Execution:** No threshold ambiguity; a switch actuation guarantees an immediate, quantized permutation update.
+* **Low Latency:** Bypasses continuous tracking math; inputs feed directly into the puzzle permutation solver.
+* **Keyboard Parity:** Aligns naturally with standard competitive keyboard simulator layouts (e.g., standard speedcubing two-hand keyboard rows).
+
+### 1.3 Weaknesses
+
+* **Button Starvation on Gamepads:** Standard gamepads provide only 4 primary face buttons and 4 D-pad directions, forcing reliance on modifier toggles (e.g., holding a button to reach Back or Down slices).
+
+
+* **Ergonomic Friction:** Forcing an analog thumbstick to act as a binary flick switch requires artificial deadzones (`flick_threshold`, `reset_threshold`) that produce input drops or unintended diagonal misfires during rapid sequences.
+* **Lack of Tactile Kinematics:** Digital switches fail to convey the physical reality of a puzzle cube, which relies on angular displacement, continuous torque, and tactile shear.
+
+---
+
+## 2. Evolution of Face Manipulation
+
+Departing from static 1-to-1 bindings unlocks analog inputs, spatial geometry, and chorded triggers. Physical solving separates manipulation into two distinct acts: clamping a layer and driving its rotation.
+
+Translating this to software requires moving beyond fixed button lookups to continuous radial tracking, polar coordinate evaluation, and dynamic input routing.
+
+---
+
+## 3. Prototype Schemes
+
+### 3.1 Autisymmetry (Bilateral Flick)
+
+* **Architecture:** Rigid synchronous flick, hand-independent rhythm layout designed to mimic two-handed cubing triggers (e.g., $R\ U\ R'\ U'$).
+
+
+* **Mechanics:**
+* Left and Right vertical stick deflections drive their respective outer flanks ($L$ on left, $R$ on right).
+* The horizontal axis on *both* sticks is mirrored to the Top ($U$) layer, allowing high-speed alternating flick rhythms between thumbs.
+* Single bumper clutches shift axes to depth planes ($F, B, D$), while a dual-bumper chord shifts to full-cube pitch ($x$) and yaw ($y$) reorientation.
+
+
+* **Tactile Profile:** Percussive, high-cadence, rhythm-game execution.
+
+
+
+### 3.2 Back Side 2 Pi (Analog Relative Radial Rotational Control)
+
+* **Architecture:** Continuous 1:1 radial manipulation utilizing the thumbstick rim as a radial rotational control.
+
+
+* **Mechanics:**
+* Dedicated shoulder buttons clamp active faces ($R1=R, L1=L, R2=F, L2=B, L1+R1=U, L2+R2=D$).
+* Sweeping the right stick along the perimeter drives slice rotation.
+* **Enter-as-Origin:** The angular vector where the stick breaches the engage radius ($0.45$) is calibrated as instantaneous $0^\circ$ (delta = 0 rad), eliminating positional jumping on entry.
+* Dropping below the release radius ($0.25$) quantizes accumulated rotation to the nearest $\frac{\pi}{2}$ radians ($90^\circ$), tweens the visual snap, and bakes the move.
+
+
+
+
+* **Tactile Profile:** Geared, analog, dial-like resistance with audio/haptic detents at each quarter-turn.
+
+
+
+### 3.3 Stick Figures (Spatial Clamp & Drag)
+
+* **Architecture:** Fully ambidextrous spatial targeting utilizing the directional geometry of dual sticks, eliminating shoulder button modifiers for face selection.
+
+
+* **Mechanics:**
+* Vector mapping matches physical layout: pushing outward isolates outer wings (Left Stick Out = $L$, Right Stick Out = $R$); pushing inward targets depth planes (Left Stick In = $F$, Right Stick In = $B$); vertical pushes target Top ($U$) and Bottom ($D$).
+* Either hand can initiate a clamp.
+* Manipulation operates in either *Solo Drag* (sweeping the clamping stick along the rim) or *Dual-Stick Manipulation* (holding the clamp on stick A while sweeping stick B).
+* Releases snap and commit per configuration.
+
+
+
+
+* **Tactile Profile:** Spatial, geometric, and direct; feels like gripping opposing sides of a physical block.
+
+
+
+### 3.4 Sticky Icky (Pointer & Radial Rotational Control)
+
+* **Architecture:** Strict functional separation of concerns: left hand targets, right hand drives.
+
+
+* **Mechanics:**
+* **Left Stick (The Pointer / Targeter):** Resting in deadzone defaults to Front ($F$), removing finger travel for forward actions; cardinal tilts target $U, D, L, R$; pressing $L3$ plunges through the core to target Back ($B$).
+* **Right Stick (The Motor):** Relative radial rotational control driving the clamped slice.
+* **Dual Bumpers ($L1 + R1$):** Double Mega Slice modifier (clamps two layers thick for wide turns: $f, u, r, l, d, b$).
+* **Triggers ($L2 \text{ or } R2$):** Free Look Camera Mode. Engaging any trigger immediately shifts into camera look (right stick orbits view); releasing the trigger instantly snaps the camera back to the locked isometric solve perspective. All puzzle manipulation is muted while held.
+* **D-Pad:** Dedicated single-slice internal cuts ($M', M, E, E'$).
+* **Right Stick Click ($R3$):** Whole-frame reorientation unlock ($x$ and $y$ axes via Left Stick).
+
+
+
+
+* **Tactile Profile:** Highly ergonomic, mechanically grounded; left hand secures the workpiece while the right hand operates the tool.
+
+
+
+---
+
+## 4. Universal Native Abstraction & Atomic Matrix Commit
+
+### 4.1 Native Runtime Primitives
+
+Across all schemes, the input pipeline reduces to two decoupled runtime primitives that feed an atomic commit dispatcher:
+
+```text
+[ RAW HARDWARE INPUT ] 
+         │
+         ├──► [ TARGET SELECTOR ] ──► Outputs: active_face (0..5), depth (1..2)
+         │
+         └──► [ ROTATOR MOTOR ]   ──► Outputs: delta_radians (float), commit_signal (bool)
+                                                │
+                                                ▼
+                                  [ LOW-LEVEL MOVE RESOLVER ]
+                                                │
+                                                ▼  Atomic Move Token ("L", "R'", "U2")
+                                    [ ENGINE SOLVE CORE ]
+                                    (Instant Matrix Permutation)
+
+```
+
+1. **Target Selector:** Resolves an active face index ($0\text{ to }5$) and slice depth ($1\text{ or }2$). Operates in either **View-Relative** mode (screen-space projection) or **Color-Rigid** mode (fixed internal axes).
+2. **Rotator Motor:** Calculates rotational displacement via continuous angular tracking (polar $\Delta\theta$ with Enter-as-Origin zero) or rigid synchronous flick threshold breaches ($90^\circ$ steps).
+
+### 4.2 Lowest-Level Move Resolution & Immediate Commit
+
+The puzzle core must remain dead simple and deterministic. There are no deferred action queues, delayed state polling, or speculative multi-step buffers:
+
+1. **Snap Boundary Evaluation:** The moment a rotational displacement crosses the release radius or commit gate, the motor calculates the integer quarter-turn delta:
+
+$$\text{steps} = \text{round}\left(\frac{\Delta\theta}{\pi / 2}\right) \pmod 4$$
+
+
+2. **Atomic Token Generation:** The resolver maps the target face, depth, and steps directly to a single standard move string:
+* Depth $1$: `R`, `R'`, `R2`, `L`, `L'`, `L2`, etc.
+* Depth $2$: `Rw`, `Rw'`, `Rw2`, etc.
+
+
+3. **Immediate Matrix Permutation:** The engine instantly executes `apply_move(token)` against the internal cube coordinate matrix. Visual tweens are purely cosmetic interpolations; the internal permutation updates on the exact frame the snap commits.
+
+---
+
+## 5. Input Discovery & Customization Decision Flow
+
+A streamlined decision flow routes player preference directly into a compiled control profile:
+
+```text
+                                [ START WIZARD ]
+                                       │
+                    Do you want radial rotational control 
+                      or rigid synchronous flick snaps?
+                                       │
+                      ┌────────────────┴────────────────┐
+                      ▼                                 ▼
+         [ RADIAL ROTATIONAL CONTROL ]       [ RIGID SYNCHRONOUS FLICK ]
+                      │                                 │
+           How do you want to pick             Are inputs 1:1 bound
+             the layer to hold?                or stick-dependent?
+           ┌──────────┴──────────┐              ┌───────┴───────┐
+           ▼                     ▼              ▼               ▼
+     [ JOYSTICK TILT ]    [ BUTTON CLUTCH ]  [ 1:1 PAD/MNK ] [ BILATERAL FLICK ]
+           │                     │              │               │
+     Sticky Icky          Back Side 2 Pi     Standard         Autisymmetry
+     / Stick Figures                          Profile
+
+```
+
+### Setup Questionnaire Architecture
+
+1. **Routing Mode:** Load Preset vs. Build Custom.
+2. **Reference Frame:** View-Relative (Camera projection) vs. Color-Rigid (Absolute world axes).
+3. **Face Target Selector:**
+* Option A: Radial Gate (Directional stick tilt, neutral default option, depth plunge option).
+* Option B: Dedicated Clutches (Discrete buttons/triggers per face).
+* Option C: Spatial Bilateral (Inward/outward dual-stick vectors).
+
+
+4. **Rotator Motor Mechanic:**
+* Option A: Radial Rotational Control (Relative floating-zero vs. absolute clockface).
+* Option B: Rigid Synchronous Flick (Threshold-gated instant steps).
+
+
+5. **Auxiliary & Core Modifiers:**
+* Core Slices ($M, E$): Dedicated D-Pad vs. Chorded.
+* Wide Layer Modifier: Dual Bumper chord vs. Trigger latch.
+* Whole-Frame Reorientation ($x, y$): Stick-click clutch vs. D-pad tier.
+* Free Look Inspection: Trigger hold (release to snap back) vs. Face button latch.
+
+
+6. **Tactile & Visual Feedback:**
+* Visual Slice Pop: Outline shader vs. 3D normal-axis drawer slide.
+* Detents: Audio quarter-turn tick (ON/OFF), Haptic pulse (ON/OFF).
+
+
+
+---
+
+## 6. Implementation Scope: The Controller Gym
+
+The development focus is the **Controller Gym** (Menu Option 4), providing an isolated testbed to dial in feel before finalizing production systems:
+
+* **Decoupled Radial Primitive:** A self-contained function receiving `(target_slice, stick_vector)` that tracks entry vectors, accumulates angular deltas, triggers detent events at $\frac{\pi}{2}$ intervals, snaps on deadzone falloff, and emits the atomic move string.
+* **Visual Layer Separation:** Immediate implementation of the "drawer slide" effect, physically offsetting the active layer along its normal vector upon target lock to provide visual confirmation before rotation starts.
+* **Telemetry Overlay:** Real-time HUD displaying stick polar vectors, deadzone thresholds, engage boundaries, target state, accumulated radians, and active modifiers.
+* **Live Tuner & Exporter:** In-engine parameter tweaking (radii, snap duration, visual offset) paired with a serializer to export active states directly to `JSON` profile configurations.

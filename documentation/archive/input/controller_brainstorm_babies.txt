@@ -1,0 +1,190 @@
+### The Three Control Schemes
+
+**1. Autisymmetry (Bilateral Flick)**
+Designed around speedcubing muscle memory and hand independence. Outer layers sit directly on neutral thumbsticks: vertical swipes handle the outer wings ($R$ on the right stick, $L$ on the left), while the horizontal axis on *either* stick turns the top layer ($U$), allowing alternating hand rhythms for standard triggers. Holding either bumper shifts the sticks down a tier to depth and bottom layers ($F$ on right stick, $B$ on left, $D$ on either horizontal axis), while clamping both bumpers locks the cube into axial pitch ($x$) and yaw ($y$) reorientation.
+
+**2. Back Side 2 pi (crank)**
+Treats the controller like an analog crank. You hold a bumper or trigger to clamp an active face, then stir the thumbstick along the outer rim. Using an "Enter-as-Origin" floating zero, the exact angle where the stick breaches the deadzone becomes $0^\circ$, so the face rotates $1:1$ without jumping on entry. Releasing the stick into the center deadzone quantizes the turn to the nearest $90^\circ$ increment.
+
+**3. Stick Figures (Directional Clamping & Drag)**
+Eliminates bumper modifiers by using the natural geometry of both thumbsticks to map all six faces. Pushing outward selects exterior wings ($L$ on left stick, $R$ on right stick), pushing upward or downward selects $U$ or $D$ on either hand, and pushing inward into the dead space selects depth ($F$ on left stick, $B$ on right stick). Once clamped, the slice can either be dragged along the rim by the same thumb or cranked with the opposite hand like a vise.
+
+---
+
+### Logic Flow & Sandbox State Machine
+
+```text
+[Input Event Received]
+  │
+  ├──► SCHEME: Autisymmetry
+  │      ├── Both Bumpers Held (L1 + R1)?
+  │      │     ├─ Yes ──► Axis 1/3 (Y) -> Pitch (x/x') | Axis 0/2 (X) -> Yaw (y/y')
+  │      │     └─ No
+  │      ├── Either Bumper Held (L1 or R1)?
+  │      │     ├─ Yes (Tier 1) ──► R-Y: F/F' | L-Y: B/B' | Shared X: D/D'
+  │      │     └─ No  (Tier 0) ──► R-Y: R/R' | L-Y: L/L' | Shared X: U/U'
+  │      └── Magnitude > flick_threshold -> Trigger Move -> Require < reset_threshold
+  │
+  ├──► SCHEME: Back Side 2Pi
+  │      ├── Face Modifier Held? (L1=L, R1=R, L2=B, R2=F, Both=U)
+  │      │     ├─ No  ──► Idle / Camera Pass-through
+  │      │     └─ Yes ──► Active Slice Latched
+  │      ├── Stick Radius >= engage_radius (0.45)?
+  │      │     ├── First Frame ──► Set origin_angle = current_stick_angle (Delta = 0)
+  │      │     └── Tracking    ──► Rotate active slice 1:1 with (current - origin)
+  │      └── Stick Radius < release_radius (0.25)?
+  │            └── Snap accumulated delta to nearest 90° -> Commit Permutation
+  │
+  └──► SCHEME: Stick Figures
+		 ├── Stick A tilted beyond engage_radius (0.45)?
+		 │     ├── L-Stick: Up=U, Down=D, Left(Out)=L, Right(In)=F
+		 │     └── R-Stick: Up=U, Down=D, Right(Out)=R, Left(In)=B
+		 ├── Evaluation Mode:
+		 │     ├── Toggle: "solo_drag"       ──► Sweep Stick A along rim -> Snap on release
+		 │     └── Toggle: "vise_and_crank"  ──► Hold Stick A (clamp) + Stir Stick B (crank)
+		 └── Commit Trigger:
+			   ├── Toggle: "release_crank"   ──► Snap when crank returns to deadzone
+			   └── Toggle: "release_clamp"   ──► Snap immediately when Stick A is released
+
+```
+
+---
+
+### JSON Scheme Profiles
+
+#### 1. `profile_autisymmetry.json`
+
+```json
+{
+  "profile_name": "Autisymmetry (Bilateral Flick)",
+  "scheme_type": "discrete_flick",
+  "sandbox_options": {
+	"shared_horizontal_u": true,
+	"shared_horizontal_d": true,
+	"either_bumper_tier1": true,
+	"dual_bumper_tier2": true,
+	"allow_z_axis": false
+  },
+  "stick_settings": {
+	"flick_threshold": 0.65,
+	"reset_threshold": 0.20,
+	"deadzone": 0.15
+  },
+  "modifiers": {
+	"tier1_clutch_l": { "type": "button", "index": 9 },
+	"tier1_clutch_r": { "type": "button", "index": 10 },
+	"tier2_both_bumpers": true
+  },
+  "actions_tier0_neutral": {
+	"move_r":       { "type": "stick", "axis": 3, "direction": -1 },
+	"move_r_prime": { "type": "stick", "axis": 3, "direction":  1 },
+	"move_l_prime": { "type": "stick", "axis": 1, "direction": -1 },
+	"move_l":       { "type": "stick", "axis": 1, "direction":  1 },
+	"move_u_left":  { "type": "stick", "axis": 2, "direction": -1 },
+	"move_u_prime": { "type": "stick", "axis": 2, "direction":  1 },
+	"move_u_alt_l": { "type": "stick", "axis": 0, "direction": -1 },
+	"move_u_alt_r": { "type": "stick", "axis": 0, "direction":  1 }
+  },
+  "actions_tier1_single_bumper": {
+	"move_f":       { "type": "stick", "axis": 3, "direction": -1 },
+	"move_f_prime": { "type": "stick", "axis": 3, "direction":  1 },
+	"move_b_prime": { "type": "stick", "axis": 1, "direction": -1 },
+	"move_b":       { "type": "stick", "axis": 1, "direction":  1 },
+	"move_d":       { "type": "stick", "axis": 2, "direction": -1 },
+	"move_d_prime": { "type": "stick", "axis": 2, "direction":  1 },
+	"move_d_alt_l": { "type": "stick", "axis": 0, "direction": -1 },
+	"move_d_alt_r": { "type": "stick", "axis": 0, "direction":  1 }
+  },
+  "actions_tier2_dual_bumper": {
+	"rot_x_prime":  { "type": "stick", "axis": 3, "direction": -1 },
+	"rot_x":        { "type": "stick", "axis": 3, "direction":  1 },
+	"rot_y_prime":  { "type": "stick", "axis": 2, "direction": -1 },
+	"rot_y":        { "type": "stick", "axis": 2, "direction":  1 },
+	"rot_x_alt_u":  { "type": "stick", "axis": 1, "direction": -1 },
+	"rot_x_alt_d":  { "type": "stick", "axis": 1, "direction":  1 },
+	"rot_y_alt_l":  { "type": "stick", "axis": 0, "direction": -1 },
+	"rot_y_alt_r":  { "type": "stick", "axis": 0, "direction":  1 }
+  }
+}
+
+```
+
+#### 2. `profile_big_spin.json`
+
+```json
+{
+  "profile_name": "Big Spin (2Pi Relative Crank)",
+  "scheme_type": "continuous_crank",
+  "sandbox_options": {
+	"enter_as_origin": true,
+	"snap_mode": "relative",
+	"detent_audio_ticks": true,
+	"crank_stick_axis_x": 2,
+	"crank_stick_axis_y": 3
+  },
+  "stick_settings": {
+	"engage_radius": 0.45,
+	"release_radius": 0.25,
+	"deadzone": 0.15
+  },
+  "modifiers": {
+	"clutch_face_r": { "type": "button", "index": 10 },
+	"clutch_face_l": { "type": "button", "index": 9 },
+	"clutch_face_f": { "type": "trigger", "axis": 5, "threshold": 0.5 },
+	"clutch_face_b": { "type": "trigger", "axis": 4, "threshold": 0.5 },
+	"clutch_face_u": { "type": "button_chord", "indices": [9, 10] }
+  },
+  "crank_channel": {
+	"tracking_axes": { "x": 2, "y": 3 },
+	"tick_interval_rad": 1.5707963,
+	"tween_snap_duration": 0.08
+  }
+}
+
+```
+
+#### 3. `profile_spatial_indy_grab.json`
+
+```json
+{
+  "profile_name": "Spatial Indy Grab",
+  "scheme_type": "spatial_clamp_and_crank",
+  "sandbox_options": {
+	"manipulation_mode": "vise_and_crank",
+	"commit_trigger": "release_clamp",
+	"allow_solo_drag_override": true,
+	"inward_axes_for_depth": true
+  },
+  "stick_settings": {
+	"clamp_engage_threshold": 0.50,
+	"crank_engage_radius": 0.45,
+	"crank_release_radius": 0.25,
+	"deadzone": 0.15
+  },
+  "spatial_clamp_map": {
+	"left_stick": {
+	  "axis_x": 0,
+	  "axis_y": 1,
+	  "up": "U",
+	  "down": "D",
+	  "outward_left": "L",
+	  "inward_right": "F"
+	},
+	"right_stick": {
+	  "axis_x": 2,
+	  "axis_y": 3,
+	  "up": "U",
+	  "down": "D",
+	  "outward_right": "R",
+	  "inward_left": "B"
+	}
+  },
+  "crank_channel": {
+	"default_crank_axes": { "x": 2, "y": 3 },
+	"alt_crank_axes": { "x": 0, "y": 1 },
+	"tick_interval_rad": 1.5707963,
+	"tween_snap_duration": 0.08
+  }
+}
+
+```

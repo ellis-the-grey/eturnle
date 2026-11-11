@@ -1,0 +1,146 @@
+### Scheme Name: Sticky Icky
+
+**Sticky Icky** splits puzzle manipulation into two distinct physical domains: the left hand clamps the target slice like a vise, while the right hand cranks the wrench.
+
+* **Targeting (Left Stick):** The left stick requires zero finger travel across buttons. Leaving the stick centered in neutral rests on the **Front ($F$)** face, eliminating stick fatigue for forward-facing moves. Tilting to the cardinal gates points directly at the corresponding layer: Up for **Top ($U$)**, Down for **Bottom ($D$)**, Left for **Left ($L$)**, and Right for **Right ($R$)**. Pressing and holding the **`L3` stick click** plunges through the core to target the **Back ($B$)** face.
+* **Driving (Right Stick):** The right stick is the universal motor. Once the left stick has clamped a face, sweeping the right stick along the rim turns that layer relative to your entry angle, with haptic/audio detents every $90^\circ$. Releasing the stick snaps and bakes the move.
+* **Double Mega Slice (Dual Bumpers `L1 + R1`):** Holding both bumpers clamps down two layers thick. Any move executed while squeezing both bumpers becomes a wide/fat turn ($f, u, r, l, d, b$).
+* **Free Look Inspection (Either Trigger `L2` or `R2`):** Squeezing either analog trigger instantly mutes puzzle interactions and puts the camera in free orbit. The right stick orbits the viewport around the cube, while the left stick pans and zooms. Releasing the trigger springs the view back to the locked isometric solve angle.
+* **Axial Reorientation (`R3` + Left Stick):** Holding the **`R3` stick click** unlocks the entire frame. Tilting the left stick Up/Down pitches the whole cube ($x / x'$), while Left/Right yaws the cube ($y / y'$), keeping your thumbs anchored to the sticks.
+* **Core Slices (D-Pad):** The D-pad is reserved strictly for internal cuts without modifiers: Up/Down executes $M' / M$, and Left/Right executes $E / E'$.
+
+---
+
+### Mapped Execution Flow
+
+```text
+================================================================================
+                           sticky icky: RUNTIME LOGIC FLOW
+================================================================================
+
+[INPUT FRAME EVALUATION]
+  │
+  ├──► TRIGGER CLUTCH (L2 > 0.5 OR R2 > 0.5)?
+  │      ├─ YES ──► [FREE LOOK CAMERA MODE]
+  │      │            ├── Right Stick (Axes 2, 3) ──► Camera Orbit (Pitch / Yaw)
+  │      │            └── Left Stick  (Axes 0, 1) ──► Camera Dolly / Zoom
+  │      └─ NO  ──► [SOLVE MODE ACTIVE]
+  │
+  ├──► WHOLE-FRAME REORIENTATION (R3 Click Held)?
+  │      ├─ YES ──► Mute Face Selection
+  │      │            ├── Left Stick Y-Axis (Axis 1) ──► Whole-Cube Pitch (x / x')
+  │      │            └── Left Stick X-Axis (Axis 0) ──► Whole-Cube Yaw (y / y')
+  │      └─ NO  ──► Proceed to Slice Pipeline
+  │
+  ├──► CORE SLICE DECK (D-Pad Direct Tap)
+  │      ├── D-Pad Up    ──► Move M' (Upward center slice)
+  │      ├── D-Pad Down  ──► Move M  (Downward center slice)
+  │      ├── D-Pad Left  ──► Move E  (Leftward equator slice)
+  │      └── D-Pad Right ──► Move E' (Rightward equator slice)
+  │
+  └──► TARGET & CRANK PIPELINE
+         │
+         ├── 1. LAYER DEPTH SELECTOR:
+         │      ├── Both Bumpers Held (L1 AND R1) ──► Depth = 2 (Wide / Double Layer)
+         │      └── Default (Zero or Single)      ──► Depth = 1 (Single Outer Layer)
+         │
+         ├── 2. FACE TARGETING (Left Stick):
+         │      ├── L3 Pressed / Held ──► Target: B (Back Face)
+         │      ├── Push Up (Y < -0.5) ──► Target: U (Top Layer)
+         │      ├── Push Dn (Y >  0.5) ──► Target: D (Bottom Layer)
+         │      ├── Push Lt (X < -0.5) ──► Target: L (Left Face)
+         │      ├── Push Rt (X >  0.5) ──► Target: R (Right Face)
+         │      └── Neutral Deadzone   ──► Target: F (Front Face)
+         │
+         └── 3. ROTATIONAL DRIVER (Right Stick):
+                ├── Radius >= 0.45 ──► Enter-as-Origin (Delta Angle = 0°)
+                ├── Perimeter Arc  ──► Rotate targeted face 1:1 with stick angle
+                │                      (Detent click every ±90°)
+                └── Radius < 0.25  ──► Release deadzone: Snap nearest 90° & bake
+================================================================================
+
+```
+
+---
+
+### Configuration Profile (`profile_vise_grip.json`)
+
+```json
+{
+  "profile_name": "sticky icky (Pointer & Crank)",
+  "scheme_type": "pointer_and_crank",
+  "stick_settings": {
+    "flick_threshold": 0.65,
+    "reset_threshold": 0.20,
+    "deadzone": 0.15,
+    "crank_engage_radius": 0.45,
+    "crank_release_radius": 0.25
+  },
+  "modifiers": {
+    "camera_look_trigger_l": {
+      "type": "trigger",
+      "axis": 4,
+      "threshold": 0.5
+    },
+    "camera_look_trigger_r": {
+      "type": "trigger",
+      "axis": 5,
+      "threshold": 0.5
+    },
+    "wide_layer_chord": {
+      "type": "button_chord",
+      "indices": [9, 10]
+    },
+    "cube_reorient_clutch": {
+      "type": "button",
+      "index": 8
+    },
+    "back_face_plunge": {
+      "type": "button",
+      "index": 7
+    }
+  },
+  "targeting_left_stick": {
+    "axis_x": 0,
+    "axis_y": 1,
+    "neutral_face": "F",
+    "up_face": "U",
+    "down_face": "D",
+    "left_face": "L",
+    "right_face": "R",
+    "click_face": "B"
+  },
+  "driver_right_stick": {
+    "axis_x": 2,
+    "axis_y": 3,
+    "crank_mode": "relative_enter_as_origin",
+    "detent_step_rad": 1.5707963,
+    "auto_snap_on_release": true
+  },
+  "actions_core_slices": {
+    "move_m_prime": {"type": "button", "index": 11},
+    "move_m":       {"type": "button", "index": 12},
+    "move_e":       {"type": "button", "index": 13},
+    "move_e_prime": {"type": "button", "index": 14}
+  },
+  "actions_modified_cube_rot": {
+    "rot_x":       {"type": "stick", "axis": 1, "direction":  1},
+    "rot_x_prime": {"type": "stick", "axis": 1, "direction": -1},
+    "rot_y":       {"type": "stick", "axis": 0, "direction":  1},
+    "rot_y_prime": {"type": "stick", "axis": 0, "direction": -1}
+  },
+  "actions_camera_freelook": {
+    "orbit_pitch": {"type": "stick", "axis": 3, "invert": true},
+    "orbit_yaw":   {"type": "stick", "axis": 2, "invert": false},
+    "pan_x":       {"type": "stick", "axis": 0, "invert": false},
+    "dolly_zoom":  {"type": "stick", "axis": 1, "invert": false}
+  },
+  "system_controls": {
+    "cancel": {"type": "button", "index": 1},
+    "select": {"type": "button", "index": 4},
+    "home":   {"type": "button", "index": 5},
+    "start":  {"type": "button", "index": 6}
+  }
+}
+
+```

@@ -1,0 +1,217 @@
+================================================================================
+                    CUBE CONTROLLER SCHEMES SPECIFICATION
+================================================================================
+
+--------------------------------------------------------------------------------
+SCHEME 1: AUTISYMMETRY (BILATERAL FLICK)
+--------------------------------------------------------------------------------
+ABSTRACT:
+A discrete, rhythm-driven layout engineered around speedcubing hand independence 
+and algorithmic finger tricks. The scheme treats both thumbs as equal partners: 
+vertical thumb flicks control the respective outer flanks (R on the right hand, 
+L on the left hand), while horizontal flicks across EITHER stick share the top 
+layer (U). This ambidextrous top-layer channel allows solvers to alternate left 
+and right thumb flicks at high speed during standard CFOP triggers (e.g., R U R' U'). 
+Bumper clutches shift the stick planes into secondary depth tiers (F, B, D) and 
+full-frame axial pitch/yaw without taking thumbs off the sticks.
+
+SYSTEM BEHAVIOR & GATING:
+• Flick Threshold: Magnitude >= 0.65 triggers a 90° face turn instant pop.
+• Reset Threshold: Magnitude must return to < 0.20 before another turn can fire.
+• Layer Turn Mode: Discrete instantaneous 90° increments.
+
+MAPPINGS & COMBOS:
+• Primary Outer Layer Mode (Neutral / Tier 0 - No Bumpers Held)
+    - Right Stick Y-Axis Up: Move R' (Right layer counter-clockwise)
+    - Right Stick Y-Axis Down: Move R (Right layer clockwise)
+    - Left Stick Y-Axis Up: Move L (Left layer clockwise)
+    - Left Stick Y-Axis Down: Move L' (Left layer counter-clockwise)
+    - Right Stick X-Axis Left: Move U (Top layer clockwise)
+    - Right Stick X-Axis Right: Move U' (Top layer counter-clockwise)
+    - Left Stick X-Axis Left: Move U (Top layer clockwise - mirrored channel)
+    - Left Stick X-Axis Right: Move U' (Top layer counter-clockwise - mirrored channel)
+
+• Secondary Depth & Base Mode (Tier 1 - Hold Either L1 OR R1)
+    - Right Stick Y-Axis Up: Move F' (Front layer counter-clockwise)
+    - Right Stick Y-Axis Down: Move F (Front layer clockwise)
+    - Left Stick Y-Axis Up: Move B (Back layer clockwise)
+    - Left Stick Y-Axis Down: Move B' (Back layer counter-clockwise)
+    - Right Stick X-Axis Left: Move D (Bottom layer clockwise)
+    - Right Stick X-Axis Right: Move D' (Bottom layer counter-clockwise)
+    - Left Stick X-Axis Left: Move D (Bottom layer clockwise - mirrored channel)
+    - Left Stick X-Axis Right: Move D' (Bottom layer counter-clockwise - mirrored channel)
+
+• Axial Reorientation Mode (Tier 2 - Squeeze BOTH L1 + R1)
+    - Either Stick Y-Axis Up: Whole-Cube Pitch Forward (x')
+    - Either Stick Y-Axis Down: Whole-Cube Pitch Backward (x)
+    - Either Stick X-Axis Left: Whole-Cube Yaw Left (y')
+    - Either Stick X-Axis Right: Whole-Cube Yaw Right (y)
+
+• Core Slice Deck (D-Pad Direct Taps - No Modifiers)
+    - D-Pad Up: Slice M' (Upward center vertical cut)
+    - D-Pad Down: Slice M (Downward center vertical cut)
+    - D-Pad Left: Slice E (Equator slice rotating left)
+    - D-Pad Right: Slice E' (Equator slice rotating right)
+
+• Wide Layer Clutch (Hold Left Trigger L2)
+    - Hold L2 + Any Face Action: Turns layer 2-slices deep (Wide: r, l, u, d, f, b)
+
+• Free Look Camera Mode (Hold Right Trigger R2)
+    - Right Stick: Free Orbit (Camera pitch and yaw around cube)
+    - Left Stick: Camera Pan / Dolly Zoom
+    - Release R2: Smooth snap back to locked isometric solve perspective
+
+
+--------------------------------------------------------------------------------
+SCHEME 2: BACK SIDE 2 PI (ANALOG RELATIVE CRANK)
+--------------------------------------------------------------------------------
+ABSTRACT:
+A continuous rotational model that treats the thumbstick perimeter as a 1:1 
+mechanical crank handle. Solvers use dedicated shoulder inputs to clamp a 
+target face, then stir the right stick along the rim to rotate that slice. It 
+employs an "Enter-as-Origin" floating zero: the angle where the thumbstick breaches 
+the deadzone is assigned 0°, ensuring slice rotation tracks smoothly without 
+positional snapping upon entry. Releasing the stick into deadzone automatically 
+quantizes the slice to the nearest 90° increment with haptic/audio detents.
+
+SYSTEM BEHAVIOR & GATING:
+• Engage Radius: Magnitude >= 0.45 sets Origin Angle and engages 1:1 tracking.
+• Release Radius: Magnitude < 0.25 disengages, snaps to nearest 90°, and bakes.
+• Detents: Audio tick and haptic pulse fire at every ±90° (π/2 radian) interval.
+
+MAPPINGS & COMBOS:
+• Face Selection Clutches (Shoulder Clamping)
+    - Hold R1 + Sweep Right Stick: Rotate Right Face (R) 1:1 with stick angle
+    - Hold L1 + Sweep Right Stick: Rotate Left Face (L) 1:1 with stick angle
+    - Hold R2 + Sweep Right Stick: Rotate Front Face (F) 1:1 with stick angle
+    - Hold L2 + Sweep Right Stick: Rotate Back Face (B) 1:1 with stick angle
+    - Squeeze L1 + R1 + Sweep Right Stick: Rotate Top Face (U) 1:1 with stick angle
+    - Squeeze L2 + R2 + Sweep Right Stick: Rotate Bottom Face (D) 1:1 with stick angle
+
+• Core Slice Deck (D-Pad Direct Taps - No Modifiers)
+    - D-Pad Up: Slice M' (Upward center vertical cut)
+    - D-Pad Down: Slice M (Downward center vertical cut)
+    - D-Pad Left: Slice E (Equator slice rotating left)
+    - D-Pad Right: Slice E' (Equator slice rotating right)
+
+• Axial Reorientation Mode (Hold R3 Stick Click)
+    - Left Stick Y-Axis Up / Down: Whole-Cube Pitch (x' / x)
+    - Left Stick X-Axis Left / Right: Whole-Cube Yaw (y' / y)
+
+• Free Look Camera Inspection (Neutral Sticks - No Clutches Held)
+    - Left Stick (Axes 0, 1): Camera Pan / Zoom
+    - Right Stick (Axes 2, 3): Camera Orbit (Pitch / Yaw)
+
+
+--------------------------------------------------------------------------------
+SCHEME 3: STICK FIGURES (SPATIAL INDY GRAB - AMBIDEXTROUS CLAMP & DRAG)
+--------------------------------------------------------------------------------
+ABSTRACT:
+A fully ambidextrous, spatial-targeting layout that eliminates bumper modifiers 
+for face selection. The scheme maps all six faces directly to the physical 
+vectors of both sticks: pushing outward targets the outer flanks (L on left stick, 
+R on right stick), pushing inward reaches into depth (F on left stick, B on right 
+stick), while vertical tilts (U and D) are mirrored symmetrically across both sticks. 
+The system is explicitly ambidextrous: EITHER stick can initiate and clamp a face, 
+and manipulation can be executed either solo (sweeping the same thumb along the rim) 
+or bilaterally (holding the clamp with one hand while cranking with the other).
+
+SYSTEM BEHAVIOR & GATING:
+• Spatial Clamp Threshold: Magnitude >= 0.45 latches target slice.
+• Execution Toggles (Sandbox Settings):
+    - Solo Drag: Sweeping the clamping stick along the rim drives rotation.
+    - Vise & Crank: Clamping stick holds target; opposite stick stirs to crank.
+• Commit Triggers (Sandbox Settings):
+    - Release Clamp: Snaps and commits the moment the targeting stick resets.
+    - Release Crank: Snaps and commits when the driving stick returns to center.
+
+MAPPINGS & COMBOS:
+• Ambidextrous Left-Stick Target Map (Left Flank + Front)
+    - Push Left (Outward): Target Left Layer (L)
+    - Push Right (Inward): Target Front Layer (F)
+    - Push Up: Target Top Layer (U) [Shared bilateral target]
+    - Push Down: Target Bottom Layer (D) [Shared bilateral target]
+
+• Ambidextrous Right-Stick Target Map (Right Flank + Back)
+    - Push Right (Outward): Target Right Layer (R)
+    - Push Left (Inward): Target Back Layer (B)
+    - Push Up: Target Top Layer (U) [Shared bilateral target]
+    - Push Down: Target Bottom Layer (D) [Shared bilateral target]
+
+• Dual-Stick Vise Execution Roles
+    - Left Hand Clamp + Right Stick Crank: Left selects, Right drives rotation
+    - Right Hand Clamp + Left Stick Crank: Right selects, Left drives rotation
+
+• Core Slice Deck (D-Pad Direct Taps - No Modifiers)
+    - D-Pad Up: Slice M' (Upward center vertical cut)
+    - D-Pad Down: Slice M (Downward center vertical cut)
+    - D-Pad Left: Slice E (Equator slice rotating left)
+    - D-Pad Right: Slice E' (Equator slice rotating right)
+
+• Double Mega Slice (Squeeze Dual Bumpers L1 + R1)
+    - Hold L1 + R1 + Any Clamped Face: Turns layer 2-slices deep (Wide: f, u, r, l, d, b)
+
+• Whole-Frame Reorientation Mode (Hold R3 Stick Click)
+    - Left Stick Y-Axis Up / Down: Whole-Cube Pitch (x' / x)
+    - Left Stick X-Axis Left / Right: Whole-Cube Yaw (y' / y)
+
+• Free Look Camera Mode (Hold Either Trigger L2 OR R2)
+    - Right Stick: Camera Orbit (Pitch / Yaw with inverted Y option)
+    - Left Stick: Camera Pan / Dolly Zoom
+    - Release Trigger: Springs camera back to locked isometric solve angle
+
+
+--------------------------------------------------------------------------------
+SCHEME 4: STICKY ICKY (POINTER & CRANK / VISE GRIP)
+--------------------------------------------------------------------------------
+ABSTRACT:
+A strict separation-of-concerns architecture designed for maximum physical 
+ergonomics. The left thumb serves exclusively as a stationary targeting vise, 
+while the right thumb acts as a universal rotational motor. The left stick rests 
+in neutral on the Front (F) face to eliminate stick fatigue during forward turns, 
+cardinal tilts isolate U, D, L, and R, and an L3 stick click plunges through the 
+core to lock Back (B). Holding both bumpers engages wide double-slices, holding 
+either trigger unlocks free-look inspection, and R3 allows full-frame reorientation.
+
+SYSTEM BEHAVIOR & GATING:
+• Left Stick Targeting: Continuous directional clamping.
+• Right Stick Driver: Enter-as-Origin relative crank (Radius >= 0.45 engages).
+• Auto-Snap: Releasing right stick into deadzone (< 0.25) bakes move to matrix.
+• Detents: Audio and haptic pulse fire at every 90° increment.
+
+MAPPINGS & COMBOS:
+• Left Stick Face Targeting (The Vise)
+    - Neutral Center (Deadzone): Target Front Face (F) [Zero-tension default]
+    - Tilt Up: Target Top Layer (U)
+    - Tilt Down: Target Bottom Layer (D)
+    - Tilt Left: Target Left Face (L)
+    - Tilt Right: Target Right Face (R)
+    - Press / Hold L3 (Stick Click): Target Back Face (B) [Plunge into depth]
+
+• Right Stick Rotational Driver (The Wrench)
+    - Sweep Perimeter Clockwise: Rotates active targeted layer clockwise
+    - Sweep Perimeter Counter-Clockwise: Rotates targeted layer counter-clockwise
+    - Return to Center: Snaps to nearest 90° and bakes move to permutation matrix
+
+• Double Mega Slice (Squeeze Dual Bumpers L1 + R1)
+    - Hold L1 + R1 + Left Stick Target + Sweep Right Stick: 
+      Turns layer 2-slices deep (Wide turns: f, u, r, l, d, b)
+
+• Whole-Frame Reorientation Mode (Hold R3 Stick Click)
+    - Left Stick Y-Axis Up: Whole-Cube Pitch Forward (x')
+    - Left Stick Y-Axis Down: Whole-Cube Pitch Backward (x)
+    - Left Stick X-Axis Left: Whole-Cube Yaw Left (y')
+    - Left Stick X-Axis Right: Whole-Cube Yaw Right (y)
+
+• Core Slice Deck (D-Pad Direct Taps - No Modifiers)
+    - D-Pad Up: Slice M' (Upward center vertical cut)
+    - D-Pad Down: Slice M (Downward center vertical cut)
+    - D-Pad Left: Slice E (Equator slice rotating left)
+    - D-Pad Right: Slice E' (Equator slice rotating right)
+
+• Free Look Camera Mode (Hold Either Trigger L2 OR R2)
+    - Trigger Held: Mutes all puzzle slice interactions
+    - Right Stick (Axes 2, 3): Camera Orbit around origin (Pitch / Yaw)
+    - Left Stick (Axes 0, 1): Camera Pan (Horizontal) and Dolly Zoom (Vertical)
+    - Release Trigger: Smoothly snaps camera back to locked solve view
+================================================================================
