@@ -16,42 +16,22 @@ const MODE_METADATA = {
 	GameMode.LIMITLESS: {
 		"id": "limitless",
 		"name": "Limitless",
-		"options": [
-			{"id": "opt_generate", "label": "Quick Scramble"},
-			{"id": "opt_restart",  "label": "Restart Scramble"},
-			{"id": "opt_copy",     "label": "Copy Scramble"},
-			{"id": "opt_param",    "label": "Length: 20"}
-		]
+		"modules": ["move_counter", "sequence_deck"]
 	},
 	GameMode.CROSSLE: {
 		"id": "crossle",
 		"name": "Crossle",
-		"options": [
-			{"id": "opt_generate", "label": "Daily Cross"},
-			{"id": "opt_restart",  "label": "Restart Attempt"},
-			{"id": "opt_copy",     "label": "Copy Scramble"},
-			{"id": "opt_param",    "label": "Target: Optimal"}
-		]
+		"modules": ["move_counter"]
 	},
 	GameMode.BABYS_FIRST_F2L: {
 		"id": "babys_first_f2l",
 		"name": "Baby's First F2L Pair",
-		"options": [
-			{"id": "opt_generate", "label": "Roll Pair"},
-			{"id": "opt_restart",  "label": "Restart Case"},
-			{"id": "opt_copy",     "label": "Copy Case"},
-			{"id": "opt_param",    "label": "Slot: FR"}
-		]
+		"modules": ["sequence_deck"]
 	},
 	GameMode.CUSTOM: {
 		"id": "custom",
 		"name": "Custom",
-		"options": [
-			{"id": "opt_generate", "label": "Apply String"},
-			{"id": "opt_restart",  "label": "Restart State"},
-			{"id": "opt_copy",     "label": "Copy Notation"},
-			{"id": "opt_param",    "label": "Edit Seed/Alg"}
-		]
+		"modules": ["sequence_deck"]
 	}
 }
 
@@ -68,7 +48,7 @@ func cycle_mode(direction: int = 1) -> void:
 func set_mode(mode: GameMode) -> void:
 	current_mode = mode
 	var meta = MODE_METADATA[current_mode]
-	mode_changed.emit(meta["id"], meta["name"], meta["options"])
+	mode_changed.emit(meta["id"], meta["name"], meta.get("options", []))
 
 func get_current_metadata() -> Dictionary:
 	return MODE_METADATA[current_mode]
