@@ -11,6 +11,7 @@ class_name CubeRoot
 # 5. Pause menu overlay state management
 # 6. Move buffer & animation time multiplier (0x speed-of-light)
 # 7. In-place solved state reset
+# 8. Real-time procedural audio event triggers
 # ==============================================================================
 
 const PIECE_SCENE: PackedScene = preload("res://scenes/core/piece.tscn")
@@ -40,6 +41,7 @@ var orientation_right: Vector3i = Vector3i(1, 0, 0)
 @onready var controller_manager: ControllerManager = $ControllerManager
 @onready var pause_overlay: Control = $MainHUD/PauseOverlay
 var move_logger: MoveLogger
+var audio_feedback: AudioFeedback
 
 var is_paused: bool = false
 
@@ -75,6 +77,13 @@ func _ready() -> void:
 		move_logger = MoveLogger.new()
 		move_logger.name = "MoveLogger"
 		add_child(move_logger)
+
+	if has_node("AudioFeedback"):
+		audio_feedback = $AudioFeedback
+	else:
+		audio_feedback = AudioFeedback.new()
+		audio_feedback.name = "AudioFeedback"
+		add_child(audio_feedback)
 
 	spawn_cube()
 	move_logger.reset_clock()
@@ -388,6 +397,12 @@ func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float, duration: 
 	var norm_axis = axis.normalized()
 	var int_axis = Vector3i(roundi(norm_axis.x), roundi(norm_axis.y), roundi(norm_axis.z))
 
+	# Center of rotating slice for spatial stereo panning & depth cutoff
+	var slice_pos: Vector3 = norm_axis * float(layer_coord)
+
+	if audio_feedback:
+		audio_feedback.play_turn_start(slice_pos, duration, cam_rig)
+
 	var affected_coords: Array[Vector3i] = []
 	for coord in pieces.keys():
 		if _coord_on_plane(coord, int_axis, layer_coord):
@@ -426,6 +441,9 @@ func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float, duration: 
 			active_pivot.queue_free()
 			active_pivot = null
 
+		if audio_feedback:
+			audio_feedback.play_turn_snap(slice_pos, cam_rig)
+
 		is_animating = false
 		_process_queue()
 	)
@@ -446,3 +464,50 @@ func _execute_cube_rotation(action_id: String, duration: float) -> void:
 	match action_id:
 		"rot_x":       global_axis = Vector3.RIGHT; angle_dir = -1.0
 		"rot_x_prime": global_axis = Vector3.RIGHT; angle_dir =  1.0
+		"rot_y":       global_axis = Vector3.UP;    angle_dir =  1.0
+		"rot_y_prime": global_axis = Vector3.UP;    angle_dir = -1.0
+		_: return
+
+	var angle_rad = angle_dir * (PI * 0.5)
+	is_animating = true
+
+	if audio_feedback:
+		audio_feedback.play_cube_rotation(duration)
+
+	active_pivot = Node3D.new()
+	add_child(active_pivot)
+
+	for p in pieces.values():
+		p.reparent(active_pivot)
+
+	var tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(active_pivot, "transform", active_pivot.transform.rotated(global_axis, angle_rad), duration)
+
+	tween.finished.connect(func():
+		var rot_basis = Basis(global_axis, angle_rad)
+		var new_f = rot_basis * Vector3(orientation_front)
+		var new_r = rot_basis * Vector3(orientation_right)
+		orientation_front = Vector3i(roundi(new_f.x), roundi(new_f.y), roundi(new_f.z))
+		orientation_right = Vector3i(roundi(new_r.x), roundi(new_r.y), roundi(new_r.z))
+
+		var new_entries: Dictionary = {}
+		for c in pieces.keys():
+			var p: Node3D = pieces[c]
+			p.reparent(self)
+
+			var rotated_pos = rot_basis * Vector3(c)
+			var new_coord = Vector3i(roundi(rotated_pos.x), roundi(rotated_pos.y), roundi(rotated_pos.z))
+
+			p.transform = (rot_basis * p.transform.basis).orthonormalized()
+			p.position = Vector3(new_coord)
+			new_entries[new_coord] = p
+
+		pieces = new_entries
+
+		if is_instance_valid(active_pivot):
+			active_pivot.queue_free()
+			active_pivot = null
+
+		is_animating = false
+		_process_queue()
+	)
