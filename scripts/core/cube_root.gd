@@ -9,6 +9,8 @@ class_name CubeRoot
 # 3. Dynamic orientation frame & color mapping for WCA logging
 # 4. Camera rig orbit handling for free-look
 # 5. Pause menu overlay state management
+# 6. Move buffer & animation time multiplier (0x speed-of-light)
+# 7. In-place solved state reset
 # ==============================================================================
 
 const PIECE_SCENE: PackedScene = preload("res://scenes/core/piece.tscn")
@@ -16,6 +18,11 @@ const PIECE_SCENE: PackedScene = preload("res://scenes/core/piece.tscn")
 var pieces: Dictionary = {}
 var is_animating: bool = false
 @export var turn_duration: float = 0.25
+@export var anim_multiplier: float = 1.0
+
+# FIFO Move Buffer
+var move_queue: Array[String] = []
+var active_pivot: Node3D = null
 
 # Initial face mapping (Vector3i world normal -> Color name)
 var color_scheme: Dictionary = {
@@ -46,14 +53,12 @@ var peek_tween: Tween
 @export var peek_speed: float = 384.0
 @export var peek_snap_duration: float = 0.15
 
-# Absolute symmetrical limits relative to the Cube's true axes
-@export var absolute_yaw_limit: float = 128.0  # Symmetrical left/right visibility
-@export var absolute_pitch_limit: float = 128.0 # Prevents gimbal lock at the top/bottom poles
+@export var absolute_yaw_limit: float = 128.0
+@export var absolute_pitch_limit: float = 128.0
 
 @export var invert_peek_x: bool = true
 @export var invert_peek_y: bool = true
 
-# Dynamically captured home view angles
 var base_cam_yaw: float = 0.0
 var base_cam_pitch: float = 0.0
 
@@ -61,7 +66,6 @@ func _ready() -> void:
 	var env_data = CubeEnvironment.setup(self)
 	cam_rig = env_data["cam_rig"]
 
-	# Dynamically capture starting angles from environment
 	base_cam_yaw = rad_to_deg(cam_rig.rotation.y)
 	base_cam_pitch = rad_to_deg(cam_rig.rotation.x)
 
@@ -79,16 +83,81 @@ func _ready() -> void:
 	controller_manager.camera_peek_updated.connect(_on_free_look_updated)
 	controller_manager.camera_peek_ended.connect(_on_free_look_ended)
 
-	# Ensure pause overlay starts hidden
 	if pause_overlay:
 		pause_overlay.visible = false
 
 func spawn_cube() -> void:
+	if is_instance_valid(active_pivot):
+		active_pivot.queue_free()
+		active_pivot = null
+
 	for p in pieces.values():
 		if is_instance_valid(p):
 			p.queue_free()
 	pieces.clear()
 	pieces = CubeSpawner.spawn(self, PIECE_SCENE)
+
+# ==============================================================================
+# CUBE RESET & BUFFER QUEUE
+# ==============================================================================
+func reset_cube() -> void:
+	move_queue.clear()
+	is_animating = false
+	orientation_front = Vector3i(0, 0, 1)
+	orientation_right = Vector3i(1, 0, 0)
+
+	if cam_rig:
+		cam_rig.rotation = Vector3(deg_to_rad(base_cam_pitch), deg_to_rad(base_cam_yaw), 0.0)
+
+	spawn_cube()
+	if move_logger:
+		move_logger.reset_clock()
+
+func queue_move(action_id: String) -> void:
+	move_queue.append(action_id)
+	_process_queue()
+
+func queue_sequence(actions: Array[String]) -> void:
+	move_queue.append_array(actions)
+	_process_queue()
+
+func apply_sequence_instant(actions: Array[String]) -> void:
+	for act in actions:
+		_record_move(act)
+		_apply_move_direct(act)
+	if move_logger:
+		move_logger.reset_clock()
+
+func _process_queue() -> void:
+	if is_animating or move_queue.is_empty():
+		return
+
+	var effective_time: float = turn_duration * anim_multiplier
+
+	# Speed of light mode: flush whole buffer instantly in 1 frame
+	if effective_time <= 0.0001:
+		while not move_queue.is_empty():
+			var act = move_queue.pop_front()
+			_record_move(act)
+			_apply_move_direct(act)
+		return
+
+	# Animated mode: pop and tween next move
+	var action_id = move_queue.pop_front()
+	_record_move(action_id)
+
+	if action_id.begins_with("rot_"):
+		_execute_cube_rotation(action_id, effective_time)
+	else:
+		_execute_face_turn(action_id, effective_time)
+
+func _record_move(action_id: String) -> void:
+	if not move_logger:
+		return
+	var is_cube_rot: bool = action_id.begins_with("rot_")
+	var category: String = "cube_rotation" if is_cube_rot else "face_turn"
+	var wca_token: String = resolve_wca_notation(action_id)
+	move_logger.record_move(action_id, category, wca_token, get_front_color(), get_right_color())
 
 # ==============================================================================
 # FREE-LOOK (CAMERA ORBIT)
@@ -109,19 +178,17 @@ func _on_free_look_updated(stick_x: float, stick_y: float, delta: float) -> void
 	current_yaw += stick_x * peek_speed * delta * mult_x
 	current_pitch += stick_y * peek_speed * delta * mult_y
 
-	# Clamp rotation around the Cube's 0.0 center to ensure symmetrical view limits
 	current_yaw = clamp(current_yaw, -absolute_yaw_limit, absolute_yaw_limit)
 	current_pitch = clamp(current_pitch, -absolute_pitch_limit, absolute_pitch_limit)
 
 	cam_rig.rotation.y = deg_to_rad(current_yaw)
 	cam_rig.rotation.x = deg_to_rad(current_pitch)
-	cam_rig.rotation.z = 0.0 # Force lock horizon
+	cam_rig.rotation.z = 0.0
 
 func _on_free_look_ended() -> void:
 	if peek_tween and peek_tween.is_running():
 		peek_tween.kill()
 
-	# Snap back to the dynamically captured home position
 	peek_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	peek_tween.tween_property(
 		cam_rig, 
@@ -138,7 +205,6 @@ func toggle_pause_menu() -> void:
 	if pause_overlay:
 		pause_overlay.visible = is_paused
 
-	# Snap camera back immediately if paused while peeking
 	if is_paused and controller_manager.was_peeking:
 		_on_free_look_ended()
 
@@ -210,24 +276,90 @@ func execute_move(action_id: String) -> void:
 		toggle_pause_menu()
 		return
 
-	if is_paused or is_animating:
+	if is_paused:
 		return
 
-	var is_cube_rot: bool = action_id.begins_with("rot_")
-	var category: String = "cube_rotation" if is_cube_rot else "face_turn"
-	var wca_token: String = resolve_wca_notation(action_id)
+	queue_move(action_id)
 
-	if is_cube_rot:
-		_execute_cube_rotation(action_id)
+# ==============================================================================
+# DIRECT (INSTANT) EXECUTION MATH
+# ==============================================================================
+func _apply_move_direct(action_id: String) -> void:
+	if action_id.begins_with("rot_"):
+		var global_axis: Vector3
+		var angle_dir: float = -1.0
+		match action_id:
+			"rot_x":       global_axis = Vector3.RIGHT; angle_dir = -1.0
+			"rot_x_prime": global_axis = Vector3.RIGHT; angle_dir =  1.0
+			"rot_y":       global_axis = Vector3.UP;    angle_dir =  1.0
+			"rot_y_prime": global_axis = Vector3.UP;    angle_dir = -1.0
+			_: return
+
+		var angle_rad = angle_dir * (PI * 0.5)
+		var rot_basis = Basis(global_axis, angle_rad)
+		var new_f = rot_basis * Vector3(orientation_front)
+		var new_r = rot_basis * Vector3(orientation_right)
+		orientation_front = Vector3i(roundi(new_f.x), roundi(new_f.y), roundi(new_f.z))
+		orientation_right = Vector3i(roundi(new_r.x), roundi(new_r.y), roundi(new_r.z))
+
+		var new_entries: Dictionary = {}
+		for c in pieces.keys():
+			var p: Node3D = pieces[c]
+			var rotated_pos = rot_basis * Vector3(c)
+			var new_coord = Vector3i(roundi(rotated_pos.x), roundi(rotated_pos.y), roundi(rotated_pos.z))
+			p.transform.basis = (rot_basis * p.transform.basis).orthonormalized()
+			p.position = Vector3(new_coord)
+			new_entries[new_coord] = p
+		pieces = new_entries
+
 	else:
-		_execute_face_turn(action_id)
+		var axis: Vector3
+		var layer_coord: int = 1
+		var angle_dir: float = -1.0
+		match action_id:
+			"move_r":       axis = Vector3.RIGHT; layer_coord =  1; angle_dir = -1.0
+			"move_r_prime": axis = Vector3.RIGHT; layer_coord =  1; angle_dir =  1.0
+			"move_l":       axis = Vector3.RIGHT; layer_coord = -1; angle_dir =  1.0
+			"move_l_prime": axis = Vector3.RIGHT; layer_coord = -1; angle_dir = -1.0
+			"move_u":       axis = Vector3.UP;    layer_coord =  1; angle_dir = -1.0
+			"move_u_prime": axis = Vector3.UP;    layer_coord =  1; angle_dir =  1.0
+			"move_d":       axis = Vector3.UP;    layer_coord = -1; angle_dir =  1.0
+			"move_d_prime": axis = Vector3.UP;    layer_coord = -1; angle_dir = -1.0
+			"move_f":       axis = Vector3.BACK;  layer_coord =  1; angle_dir = -1.0
+			"move_f_prime": axis = Vector3.BACK;  layer_coord =  1; angle_dir =  1.0
+			"move_b":       axis = Vector3.BACK;  layer_coord = -1; angle_dir =  1.0
+			"move_b_prime": axis = Vector3.BACK;  layer_coord = -1; angle_dir = -1.0
+			"move_m":       axis = Vector3.RIGHT; layer_coord =  0; angle_dir =  1.0
+			"move_m_prime": axis = Vector3.RIGHT; layer_coord =  0; angle_dir = -1.0
+			_: return
 
-	move_logger.record_move(action_id, category, wca_token, get_front_color(), get_right_color())
+		var norm_axis = axis.normalized()
+		var int_axis = Vector3i(roundi(norm_axis.x), roundi(norm_axis.y), roundi(norm_axis.z))
+		var angle_rad = angle_dir * (PI * 0.5)
+		var rot_basis = Basis(norm_axis, angle_rad)
+
+		var affected_coords: Array[Vector3i] = []
+		for coord in pieces.keys():
+			if _coord_on_plane(coord, int_axis, layer_coord):
+				affected_coords.append(coord)
+
+		var new_entries: Dictionary = {}
+		for c in affected_coords:
+			var p: Node3D = pieces[c]
+			var rotated_pos = rot_basis * Vector3(c)
+			var new_coord = Vector3i(roundi(rotated_pos.x), roundi(rotated_pos.y), roundi(rotated_pos.z))
+			p.transform.basis = (rot_basis * p.transform.basis).orthonormalized()
+			p.position = Vector3(new_coord)
+			pieces.erase(c)
+			new_entries[new_coord] = p
+
+		for nc in new_entries.keys():
+			pieces[nc] = new_entries[nc]
 
 # ==============================================================================
-# SLICE ROTATION (VIEW-RELATIVE / SCREEN LOCKED)
+# ANIMATED SLICE ROTATION
 # ==============================================================================
-func _execute_face_turn(action_id: String) -> void:
+func _execute_face_turn(action_id: String, duration: float) -> void:
 	var axis: Vector3
 	var layer_coord: int = 1
 	var angle_dir: float = -1.0
@@ -249,9 +381,9 @@ func _execute_face_turn(action_id: String) -> void:
 		"move_m_prime": axis = Vector3.RIGHT; layer_coord =  0; angle_dir = -1.0
 		_: return
 
-	_rotate_slice(axis, layer_coord, angle_dir * (PI * 0.5))
+	_rotate_slice(axis, layer_coord, angle_dir * (PI * 0.5), duration)
 
-func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float) -> void:
+func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float, duration: float) -> void:
 	is_animating = true
 	var norm_axis = axis.normalized()
 	var int_axis = Vector3i(roundi(norm_axis.x), roundi(norm_axis.y), roundi(norm_axis.z))
@@ -261,14 +393,14 @@ func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float) -> void:
 		if _coord_on_plane(coord, int_axis, layer_coord):
 			affected_coords.append(coord)
 
-	var pivot = Node3D.new()
-	add_child(pivot)
+	active_pivot = Node3D.new()
+	add_child(active_pivot)
 
 	for c in affected_coords:
-		pieces[c].reparent(pivot)
+		pieces[c].reparent(active_pivot)
 
 	var tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(pivot, "transform", pivot.transform.rotated(norm_axis, angle_rad), turn_duration)
+	tween.tween_property(active_pivot, "transform", active_pivot.transform.rotated(norm_axis, angle_rad), duration)
 
 	tween.finished.connect(func():
 		var rot_basis = Basis(norm_axis, angle_rad)
@@ -290,8 +422,12 @@ func _rotate_slice(axis: Vector3, layer_coord: int, angle_rad: float) -> void:
 		for nc in new_entries.keys():
 			pieces[nc] = new_entries[nc]
 
-		pivot.queue_free()
+		if is_instance_valid(active_pivot):
+			active_pivot.queue_free()
+			active_pivot = null
+
 		is_animating = false
+		_process_queue()
 	)
 
 func _coord_on_plane(coord: Vector3i, axis: Vector3i, layer: int) -> bool:
@@ -301,51 +437,12 @@ func _coord_on_plane(coord: Vector3i, axis: Vector3i, layer: int) -> bool:
 	return false
 
 # ==============================================================================
-# FULL CUBE ROTATIONS
+# ANIMATED FULL CUBE ROTATION
 # ==============================================================================
-func _execute_cube_rotation(action_id: String) -> void:
+func _execute_cube_rotation(action_id: String, duration: float) -> void:
 	var global_axis: Vector3
 	var angle_dir: float = -1.0
 	
 	match action_id:
 		"rot_x":       global_axis = Vector3.RIGHT; angle_dir = -1.0
 		"rot_x_prime": global_axis = Vector3.RIGHT; angle_dir =  1.0
-		"rot_y":       global_axis = Vector3.UP;    angle_dir =  1.0
-		"rot_y_prime": global_axis = Vector3.UP;    angle_dir = -1.0
-		_: return
-
-	var angle_rad = angle_dir * (PI * 0.5)
-	var rot_basis = Basis(global_axis, angle_rad)
-
-	var new_f = rot_basis * Vector3(orientation_front)
-	var new_r = rot_basis * Vector3(orientation_right)
-	orientation_front = Vector3i(roundi(new_f.x), roundi(new_f.y), roundi(new_f.z))
-	orientation_right = Vector3i(roundi(new_r.x), roundi(new_r.y), roundi(new_r.z))
-	
-	is_animating = true
-	var pivot = Node3D.new()
-	add_child(pivot)
-
-	for p in pieces.values():
-		p.reparent(pivot)
-
-	var tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(pivot, "transform", pivot.transform.rotated(global_axis, angle_rad), turn_duration)
-
-	tween.finished.connect(func():
-		var new_entries: Dictionary = {}
-		for c in pieces.keys():
-			var p: Node3D = pieces[c]
-			p.reparent(self)
-
-			var rotated_pos = rot_basis * Vector3(c)
-			var new_coord = Vector3i(roundi(rotated_pos.x), roundi(rotated_pos.y), roundi(rotated_pos.z))
-
-			p.transform = p.transform.orthonormalized()
-			p.position = Vector3(new_coord)
-			new_entries[new_coord] = p
-
-		pieces = new_entries
-		pivot.queue_free()
-		is_animating = false
-	)
