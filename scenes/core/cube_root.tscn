@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://i5tbxb4eeqlw" path="res://scripts/input/controller_manager.gd" id="3_hldgl"]
 [ext_resource type="Script" uid="uid://cy2jpudiw2mrx" path="res://scripts/ui/main_hud.gd" id="3_yusav"]
 [ext_resource type="Script" uid="uid://c8rp0vdmo3gpf" path="res://scripts/core/mode_manager.gd" id="4_3g5l6"]
+[ext_resource type="Script" uid="uid://1ht7suim82ps" path="res://scripts/core/crossle_manager.gd" id="6_8mgg2"]
 
 [node name="CubeRoot" type="Node3D" unique_id=1973148647]
 script = ExtResource("1_ib81i")
@@ -20,3 +21,6 @@ script = ExtResource("3_hldgl")
 
 [node name="ModeManager" type="Node" parent="." unique_id=2015192391]
 script = ExtResource("4_3g5l6")
+
+[node name="Node" type="Node" parent="." unique_id=1420316931]
+script = ExtResource("6_8mgg2")

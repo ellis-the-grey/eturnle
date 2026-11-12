@@ -10,6 +10,7 @@ class_name MainHUD
 @export var controller_manager: ControllerManager
 @export var mode_manager: ModeManager
 @export var cube_root: Node
+@export var crossle_manager: CrossleManager
 
 # Mode Switcher Button (Top Left)
 var btn_mode_cycle: Button
@@ -25,12 +26,36 @@ var line_sequence: LineEdit
 var slider_scramble_len: HSlider
 var input_scramble_seed: LineEdit
 
+# Crossle Deck & Live Gameplay HUD References
+var lbl_crossle_target: Label
+var input_crossle_seed: LineEdit
+var crossle_hud_panel: PanelContainer
+var lbl_hud_status: Label
+var lbl_hud_timer: Label
+var lbl_hud_moves: Label
+var lbl_hud_tree_stats: Label
+var lbl_hud_result: Label
+var log_dump_box: VBoxContainer
+var txt_move_log_dump: TextEdit
+var btn_copy_log_dump: Button
+
 # Persistent Speed Multiplier (Top Right)
 var slider_speed: HSlider
 
 func _ready() -> void:
 	if not cube_root:
 		cube_root = get_parent() if get_parent() is CubeRoot else get_tree().root.find_child("CubeRoot", true, false)
+
+	# Auto-locate or instantiate CrossleManager directly on MainHUD
+	if not crossle_manager:
+		crossle_manager = get_node_or_null("CrossleManager")
+		if not crossle_manager and cube_root:
+			crossle_manager = cube_root.get_node_or_null("CrossleManager")
+		if not crossle_manager:
+			crossle_manager = CrossleManager.new()
+			crossle_manager.name = "CrossleManager"
+			crossle_manager.cube_root = cube_root
+			add_child(crossle_manager)
 
 	for container in [top_left, top_right, bottom_left, bottom_right]:
 		for child in container.get_children():
@@ -40,6 +65,15 @@ func _ready() -> void:
 	_build_top_left()
 	_build_top_right()
 	_build_bottom_right()
+	_build_crossle_live_hud()
+
+	if crossle_manager:
+		crossle_manager.state_changed.connect(_on_crossle_state_changed)
+		crossle_manager.inspection_tick.connect(_on_crossle_inspection_tick)
+		crossle_manager.solve_tick.connect(_on_crossle_solve_tick)
+		crossle_manager.crossle_completed.connect(_on_crossle_completed)
+		if controller_manager and not controller_manager.move_requested.is_connected(crossle_manager._on_player_move_requested):
+			controller_manager.move_requested.connect(crossle_manager._on_player_move_requested)
 
 	if mode_manager:
 		mode_manager.mode_changed.connect(_on_mode_changed)
@@ -52,7 +86,6 @@ func _ready() -> void:
 
 	if cube_root and slider_speed:
 		slider_speed.value = cube_root.anim_multiplier
-		# Triggers value_changed to sync the label
 
 	_bind_descriptions_recursive(pause_overlay)
 	
@@ -85,6 +118,7 @@ func toggle_pause() -> void:
 	pause_overlay.visible = not pause_overlay.visible
 	if pause_overlay.visible:
 		_reset_description()
+		_refresh_crossle_target_label()
 		if top_left.get_child_count() > 0:
 			var first_btn = top_left.get_child(0) as Control
 			if first_btn:
@@ -115,6 +149,178 @@ func _click_focused_button() -> void:
 	var focused = get_viewport().gui_get_focus_owner()
 	if focused is Button:
 		focused.pressed.emit()
+
+# ==============================================================================
+# LIVE GAMEPLAY HUD & TELEMETRY DUMP (OUTSIDE PAUSE OVERLAY)
+# ==============================================================================
+func _build_crossle_live_hud() -> void:
+	crossle_hud_panel = PanelContainer.new()
+	crossle_hud_panel.visible = false
+	crossle_hud_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	crossle_hud_panel.offset_top = 12
+	crossle_hud_panel.offset_left = 48
+	crossle_hud_panel.offset_right = -48
+
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.06, 0.07, 0.09, 0.82)
+	panel_style.corner_radius_top_left = 6
+	panel_style.corner_radius_top_right = 6
+	panel_style.corner_radius_bottom_left = 6
+	panel_style.corner_radius_bottom_right = 6
+	panel_style.content_margin_left = 14
+	panel_style.content_margin_right = 14
+	panel_style.content_margin_top = 10
+	panel_style.content_margin_bottom = 10
+	crossle_hud_panel.add_theme_stylebox_override("panel", panel_style)
+	add_child(crossle_hud_panel)
+
+	var vbox = VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 6)
+	crossle_hud_panel.add_child(vbox)
+
+	var top_bar = HBoxContainer.new()
+	top_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	top_bar.add_theme_constant_override("separation", 28)
+	vbox.add_child(top_bar)
+
+	lbl_hud_status = Label.new()
+	lbl_hud_status.text = "INSPECTION"
+	top_bar.add_child(lbl_hud_status)
+
+	lbl_hud_timer = Label.new()
+	lbl_hud_timer.text = "15.00s"
+	top_bar.add_child(lbl_hud_timer)
+
+	lbl_hud_moves = Label.new()
+	lbl_hud_moves.text = "Moves: 0 / Par: -"
+	top_bar.add_child(lbl_hud_moves)
+
+	# Raw Solver Tree Telemetry Readout
+	lbl_hud_tree_stats = Label.new()
+	lbl_hud_tree_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_hud_tree_stats.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl_hud_tree_stats.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_hud_tree_stats.modulate = Color(0.7, 0.9, 1.0, 0.95)
+	vbox.add_child(lbl_hud_tree_stats)
+
+	lbl_hud_result = Label.new()
+	lbl_hud_result.visible = false
+	lbl_hud_result.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_hud_result.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl_hud_result.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(lbl_hud_result)
+
+	# Copyable Line-by-Line Move Log Box (Shown on Solve Completion)
+	log_dump_box = VBoxContainer.new()
+	log_dump_box.visible = false
+	log_dump_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	log_dump_box.add_theme_constant_override("separation", 6)
+	vbox.add_child(log_dump_box)
+
+	var dump_header = HBoxContainer.new()
+	dump_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	log_dump_box.add_child(dump_header)
+
+	var lbl_dump_title = Label.new()
+	lbl_dump_title.text = "Solve Move Log & Solver Stats:"
+	lbl_dump_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dump_header.add_child(lbl_dump_title)
+
+	btn_copy_log_dump = Button.new()
+	btn_copy_log_dump.text = "Copy to Clipboard"
+	btn_copy_log_dump.pressed.connect(func():
+		if txt_move_log_dump and not txt_move_log_dump.text.is_empty():
+			DisplayServer.clipboard_set(txt_move_log_dump.text)
+			btn_copy_log_dump.text = "Copied!"
+	)
+	dump_header.add_child(btn_copy_log_dump)
+
+	txt_move_log_dump = TextEdit.new()
+	txt_move_log_dump.editable = false
+	txt_move_log_dump.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	txt_move_log_dump.custom_minimum_size = Vector2(0, 170)
+	txt_move_log_dump.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	var log_bg = StyleBoxFlat.new()
+	log_bg.bg_color = Color(0.03, 0.04, 0.05, 0.92)
+	log_bg.content_margin_left = 8
+	log_bg.content_margin_right = 8
+	log_bg.content_margin_top = 6
+	log_bg.content_margin_bottom = 6
+	txt_move_log_dump.add_theme_stylebox_override("normal", log_bg)
+	txt_move_log_dump.add_theme_stylebox_override("read_only", log_bg)
+	log_dump_box.add_child(txt_move_log_dump)
+
+func _format_tree_stats_banner() -> String:
+	if not crossle_manager or crossle_manager.tree_stats.is_empty():
+		return ""
+	var st = crossle_manager.tree_stats
+	return "BWD Tree: %d states (%d edges, %dus @ %.1fns/edge)\nFWD Tree (d=%d): %d states (%d edges, %dus @ %.1fns/edge) | Total: %d checks in %dus (%.1fns avg)" % [
+		st.get("bwd_states", 0),
+		st.get("bwd_edges", 0),
+		st.get("bwd_us", 0),
+		st.get("bwd_ns_per_edge", 0.0),
+		st.get("fwd_depth", 0),
+		st.get("fwd_states", 0),
+		st.get("fwd_edges", 0),
+		st.get("fwd_us", 0),
+		st.get("fwd_ns_per_edge", 0.0),
+		st.get("total_edges", 0),
+		st.get("total_us", 0),
+		st.get("avg_ns_per_edge", 0.0)
+	]
+
+func _on_crossle_state_changed(new_state: String) -> void:
+	if not crossle_hud_panel:
+		return
+
+	match new_state:
+		"IDLE":
+			crossle_hud_panel.visible = false
+			if log_dump_box:
+				log_dump_box.visible = false
+		"INSPECTING":
+			crossle_hud_panel.visible = true
+			lbl_hud_result.visible = false
+			if log_dump_box:
+				log_dump_box.visible = false
+			if btn_copy_log_dump:
+				btn_copy_log_dump.text = "Copy to Clipboard"
+			lbl_hud_status.text = "INSPECT (%s Cross)" % crossle_manager.target_cross_color
+			lbl_hud_moves.text = "Moves: 0 / Par: %d" % crossle_manager.par_moves
+			lbl_hud_tree_stats.text = _format_tree_stats_banner()
+		"SOLVING":
+			crossle_hud_panel.visible = true
+			lbl_hud_status.text = "SOLVING (%s Cross)" % crossle_manager.target_cross_color
+		"COMPLETED":
+			lbl_hud_status.text = "SOLVED!"
+
+func _on_crossle_inspection_tick(seconds_left: float) -> void:
+	if lbl_hud_timer:
+		lbl_hud_timer.text = "%.2fs" % seconds_left
+
+func _on_crossle_solve_tick(elapsed_seconds: float) -> void:
+	if lbl_hud_timer:
+		lbl_hud_timer.text = "%.2fs" % elapsed_seconds
+	if lbl_hud_moves and crossle_manager:
+		lbl_hud_moves.text = "Moves: %d / Par: %d" % [crossle_manager.player_move_count, crossle_manager.par_moves]
+
+func _on_crossle_completed(result: Dictionary) -> void:
+	if lbl_hud_moves:
+		lbl_hud_moves.text = "Moves: %d / Par: %d" % [result["moves"], result["par"]]
+	if lbl_hud_result:
+		var opt_str = " ".join(result["par_solution"])
+		lbl_hud_result.text = "%s! (%d moves vs Par %d in %.2fs) | Optimal: %s" % [
+			result["rating"].to_upper(),
+			result["moves"],
+			result["par"],
+			result["time"],
+			opt_str
+		]
+		lbl_hud_result.visible = true
+	if txt_move_log_dump and log_dump_box:
+		txt_move_log_dump.text = result.get("full_log_dump", "")
+		log_dump_box.visible = true
 
 # ==============================================================================
 # CONTEXT INSPECTOR (BOTTOM RIGHT)
@@ -179,6 +385,10 @@ func _build_top_left() -> void:
 			cube_root = get_parent() if get_parent() is CubeRoot else get_tree().root.find_child("CubeRoot", true, false)
 		if cube_root and cube_root.has_method("reset_cube"):
 			cube_root.reset_cube()
+		if crossle_manager:
+			crossle_manager.current_state = CrossleManager.State.IDLE
+			_on_crossle_state_changed("IDLE")
+		_refresh_crossle_target_label()
 	)
 	top_left.add_child(btn_reset)
 
@@ -286,7 +496,9 @@ func _on_mode_changed(_id: String, display_name: String, options: Array) -> void
 	var meta = mode_manager.get_current_metadata() if mode_manager else {}
 	var modules: Array = meta.get("modules", [])
 
-	if modules.is_empty():
+	if _id.to_lower() == "crossle" or "crossle_deck" in modules:
+		_mount_crossle_deck()
+	elif modules.is_empty():
 		_build_generic_mode_deck(display_name, options)
 	else:
 		for mod in modules:
@@ -297,6 +509,83 @@ func _on_mode_changed(_id: String, display_name: String, options: Array) -> void
 					_mount_sequence_deck()
 
 	_bind_descriptions_recursive(bottom_left)
+
+func _mount_crossle_deck() -> void:
+	lbl_crossle_target = Label.new()
+	bottom_left.add_child(lbl_crossle_target)
+	_refresh_crossle_target_label()
+
+	# Row 1: Seed Input + Seed of the Day button
+	var row_seed = HBoxContainer.new()
+	bottom_left.add_child(row_seed)
+
+	input_crossle_seed = LineEdit.new()
+	input_crossle_seed.placeholder_text = "Daily or Custom Seed..."
+	input_crossle_seed.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	input_crossle_seed.set_meta("desc_title", "Crossle Seed")
+	input_crossle_seed.set_meta("desc_body", "Enter a custom seed string/number, or click Seed of the Day.")
+	row_seed.add_child(input_crossle_seed)
+
+	var btn_daily = Button.new()
+	btn_daily.text = "Seed of the Day"
+	btn_daily.set_meta("desc_title", "Seed of the Day")
+	btn_daily.set_meta("desc_body", "Populates today's deterministic UTC daily challenge seed.")
+	btn_daily.pressed.connect(func():
+		if crossle_manager and input_crossle_seed:
+			input_crossle_seed.text = str(crossle_manager.get_seed_of_the_day())
+	)
+	row_seed.add_child(btn_daily)
+
+	# Row 2: Play Crossle vs Scramble Only
+	var row_actions = HBoxContainer.new()
+	bottom_left.add_child(row_actions)
+
+	var btn_play_crossle = Button.new()
+	btn_play_crossle.text = "Play Crossle"
+	btn_play_crossle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_play_crossle.set_meta("desc_title", "Play Crossle")
+	btn_play_crossle.set_meta("desc_body", "Locks current bottom/front orientation, computes Par, scrambles instantly, and begins 15s inspection.")
+	btn_play_crossle.pressed.connect(_on_play_crossle_pressed)
+	row_actions.add_child(btn_play_crossle)
+
+	var btn_scramble_only = Button.new()
+	btn_scramble_only.text = "Scramble Only"
+	btn_scramble_only.set_meta("desc_title", "Scramble Only")
+	btn_scramble_only.set_meta("desc_body", "Applies the seed scramble in free-play mode without starting timers or Par tracking.")
+	btn_scramble_only.pressed.connect(_on_crossle_scramble_only_pressed)
+	row_actions.add_child(btn_scramble_only)
+
+func _refresh_crossle_target_label() -> void:
+	if not lbl_crossle_target or not cube_root:
+		return
+	var down_color = cube_root.color_scheme.get(-cube_root.get_orientation_up(), "White")
+	var front_color = cube_root.get_front_color()
+	lbl_crossle_target.text = "Target: %s Cross (%s Front)" % [down_color, front_color]
+
+func _resolve_crossle_seed_input() -> Dictionary:
+	var raw = input_crossle_seed.text.strip_edges() if input_crossle_seed else ""
+	if raw.is_empty():
+		return {"use_daily": true, "seed": 0}
+	if raw.is_valid_int():
+		return {"use_daily": false, "seed": raw.to_int()}
+	return {"use_daily": false, "seed": abs(raw.hash())}
+
+func _on_play_crossle_pressed() -> void:
+	if not crossle_manager:
+		return
+	var seed_info = _resolve_crossle_seed_input()
+	crossle_manager.start_crossle_match(seed_info["use_daily"], seed_info["seed"])
+	_close_menu()
+
+func _on_crossle_scramble_only_pressed() -> void:
+	if not crossle_manager or not cube_root:
+		return
+	var seed_info = _resolve_crossle_seed_input()
+	var s = crossle_manager.get_seed_of_the_day() if seed_info["use_daily"] else seed_info["seed"]
+	var tokens = crossle_manager.generate_scramble_from_seed(s)
+	var actions = crossle_manager._translate_wca_to_cube_actions(tokens)
+	cube_root.reset_cube()
+	cube_root.apply_sequence_instant(actions)
 
 func _mount_move_counter() -> void:
 	var row = HBoxContainer.new()
